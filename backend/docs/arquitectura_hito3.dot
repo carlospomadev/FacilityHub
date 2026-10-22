@@ -1,0 +1,18 @@
+digraph G {
+  graph [rankdir=LR, bgcolor="white", pad=0.3, nodesep=0.55, ranksep=0.8];
+  node [shape=box, style="rounded,filled", fillcolor="#F4F7F9", color="#2D5969", fontname="Arial", fontsize=11, margin="0.16,0.10"];
+  edge [color="#557987", penwidth=1.5, arrowsize=0.8];
+
+  Android [label="App Android\n(Kotlin)\nSiguiente hito", fillcolor="#FAFAFA", color="#8C8C8C"];
+  API [label="API REST\nSpring Boot"];
+  Service [label="Servicios\nLógica de negocio"];
+  Repo [label="Repositorios\nSpring Data JPA"];
+  DB [label="PostgreSQL\nFacilityHub", shape=cylinder, fillcolor="#EEF6F8"];
+  Flyway [label="Flyway\nMigraciones SQL", fillcolor="#F7FAFB"];
+
+  Android -> API [label=" HTTP / JSON", fontname="Arial", fontsize=9];
+  API -> Service;
+  Service -> Repo;
+  Repo -> DB;
+  Flyway -> DB [label=" crea / carga", fontname="Arial", fontsize=9];
+}

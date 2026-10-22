@@ -1,0 +1,45 @@
+﻿# ===== FacilityHub =====
+
+# Copia de seguridad previa
+FacilityHub_Avance_50pct_v0.7/
+
+# ===== Java / Spring Boot =====
+backend/target/
+*.class
+*.jar
+classpath.txt
+
+# Archivos generados durante pruebas
+backend/certificado_prueba.txt
+backend/certificado_descargado.txt
+backend/storage/
+storage/
+
+# ===== Android / Gradle =====
+android/.gradle/
+android/**/build/
+android/local.properties
+android/.idea/
+*.iml
+
+# ===== IDE =====
+.idea/
+.vscode/
+
+# ===== Sistema operativo =====
+.DS_Store
+Thumbs.db
+
+# ===== Logs =====
+*.log
+logs/
+
+# ===== Variables y secretos =====
+.env
+.env.*
+!.env.example
+
+# ===== Temporales =====
+*.tmp
+*.temp
+*.bak

@@ -1,0 +1,38 @@
+FacilityHub Hito 7 - Preflight
+==================================
+[OK] backend/pom.xml
+[OK] backend/Dockerfile
+[OK] backend/docker-compose.yml
+[OK] backend/src/main/resources/application.yml
+[OK] backend/src/main/resources/db/migration/V1__crear_modelo_inicial.sql
+[OK] backend/src/main/resources/db/migration/V2__cargar_datos_demo.sql
+[OK] backend/src/main/resources/db/migration/V3__crear_usuarios_demo.sql
+[OK] android/settings.gradle.kts
+[OK] android/build.gradle.kts
+[OK] android/app/build.gradle.kts
+[OK] android/app/src/main/AndroidManifest.xml
+[OK] android/app/src/main/java/com/facilityhub/app/data/FacilityApi.kt
+[OK] Java 21 configurado
+[OK] Spring Boot 4.1.1 configurado
+[OK] PostgreSQL configurado
+[OK] Flyway configurado
+[OK] JWT configurado
+[OK] Login publicado
+[OK] Rol EXPLOTACION
+[OK] Android usa localhost del host via emulador
+[OK] Android permite trafico HTTP local
+[OK] Docker contiene backend y postgres
+[OK] Ruta Android api/auth/login
+[OK] Ruta Android api/centros
+[OK] Ruta Android api/centros/{id}/locales
+[OK] Ruta Android api/locales/{id}/inquilino-actual
+[OK] Ruta Android api/locales/{id}/instalaciones
+[OK] Ruta Android api/locales/{id}/obligaciones
+[OK] Ruta Android api/obligaciones/{id}/mantenimientos
+[OK] Backend publica /api/auth
+[OK] Backend publica /api/centros
+[OK] Backend publica /api/locales
+[OK] Backend publica /api/obligaciones
+[OK] Backend publica /api/mantenimientos
+
+Resultado: 34/34 comprobaciones superadas.
