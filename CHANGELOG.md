@@ -71,3 +71,46 @@
 - Visualización de centros.
 - Visualización de locales.
 - Continuar segundo 50 % del proyecto.
+
+## 23/10/2026 - Validación integración Android end-to-end
+
+### Compatibilidad Android
+- Generación e incorporación del Gradle Wrapper.
+- Ajuste del proyecto a Android Gradle Plugin 9.2.1.
+- Configuración de Gradle 9.4.1.
+- Adaptación al soporte Kotlin integrado de AGP 9.
+- Eliminación de configuración Kotlin obsoleta.
+- Compilación Android validada mediante `assembleDebug`.
+
+### Conectividad
+- Configuración del emulador Android para acceder al backend mediante `10.0.2.2:8080`.
+- Validación del permiso INTERNET.
+- Incorporación de `ACCESS_LOCAL_NETWORK` para Android 17 / API 37.
+- Solicitud del permiso de red local en tiempo de ejecución.
+- Health check del backend validado desde el propio emulador.
+
+### Integración Android - Backend
+- Login desde Android validado correctamente.
+- Autenticación JWT integrada.
+- Identificación de usuario y rol EXPLOTACION.
+- Consulta de centros comerciales.
+- Consulta de locales por centro.
+- Consulta del inquilino actual.
+- Consulta de instalaciones técnicas.
+- Consulta de obligaciones de mantenimiento.
+- Consulta del histórico de mantenimientos.
+- Creación de mantenimiento desde Android.
+- Persistencia del nuevo mantenimiento en PostgreSQL.
+- Refresco y visualización del mantenimiento creado en la aplicación.
+
+### Flujo end-to-end validado
+Android App
+-> API REST
+-> Spring Security / JWT
+-> Servicios Spring Boot
+-> PostgreSQL
+-> Respuesta API
+-> Actualización de interfaz Android
+
+### Resultado
+La integración móvil principal de FacilityHub queda funcional y validada para el hito de avance del proyecto.
