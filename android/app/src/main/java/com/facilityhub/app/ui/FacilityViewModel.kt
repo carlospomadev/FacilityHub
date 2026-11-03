@@ -52,11 +52,16 @@ class FacilityViewModel(application: Application) : AndroidViewModel(application
         action { mantenimientos = repository.mantenimientos(obligacionId) }
     }
 
-    fun crearMantenimiento(obligacionId: Long, fecha: String, descripcion: String?, onCreated: () -> Unit) = viewModelScope.launch {
-        action {
-            repository.crearMantenimiento(obligacionId, fecha, descripcion)
-            mantenimientos = repository.mantenimientos(obligacionId)
-            onCreated()
+    fun crearMantenimiento(obligacionId: Long, fecha: String, descripcion: String?, onCreated: () -> Unit) {
+        // Guarda sincrona: se marca ocupado antes de lanzar la corrutina para ignorar toques repetidos.
+        if (loading) return
+        loading = true
+        viewModelScope.launch {
+            action {
+                repository.crearMantenimiento(obligacionId, fecha, descripcion)
+                mantenimientos = repository.mantenimientos(obligacionId)
+                onCreated()
+            }
         }
     }
 

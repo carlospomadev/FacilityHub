@@ -363,7 +363,9 @@ fun MantenimientosScreen(
                     obligacionId = obligacion.id,
                     fecha = fecha,
                     descripcion = descripcion.ifBlank { null }
-                ) {}
+                ) {
+                    descripcion = ""
+                }
             },
             enabled = !vm.loading
         ) {
