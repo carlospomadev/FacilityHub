@@ -1,5 +1,10 @@
 package com.facilityhub.app.data
 
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.MultipartBody
+import okhttp3.RequestBody.Companion.asRequestBody
+import java.io.File
+
 class FacilityRepository(private val api: FacilityApi, private val tokenStore: TokenStore) {
     suspend fun login(email: String, password: String): LoginResponse {
         val response = api.login(LoginRequest(email, password))
@@ -19,4 +24,9 @@ class FacilityRepository(private val api: FacilityApi, private val tokenStore: T
         api.crearMantenimiento(obligacionId, CrearMantenimientoRequest(fecha, descripcion))
     suspend fun cambiarEstadoMantenimiento(mantenimientoId: Long, estado: String, fechaRealizacion: String?, observaciones: String?) =
         api.cambiarEstadoMantenimiento(mantenimientoId, CambiarEstadoMantenimientoRequest(estado, fechaRealizacion, observaciones))
+
+    suspend fun documentos(mantenimientoId: Long) = api.documentos(mantenimientoId)
+    // El cuerpo se envia en streaming desde el archivo; el backend espera la parte multipart "file".
+    suspend fun subirDocumento(mantenimientoId: Long, nombre: String, mime: String, archivo: File) =
+        api.subirDocumento(mantenimientoId, MultipartBody.Part.createFormData("file", nombre, archivo.asRequestBody(mime.toMediaType())))
 }

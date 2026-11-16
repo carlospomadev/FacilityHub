@@ -1,5 +1,7 @@
 package com.facilityhub.app.ui
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -308,6 +310,7 @@ fun LocalDetalleScreen(
 fun MantenimientosScreen(
     vm: FacilityViewModel,
     obligacion: ObligacionDto,
+    onDocumentos: (MantenimientoDto) -> Unit,
     onBack: () -> Unit
 ) {
     var fecha by remember {
@@ -466,6 +469,14 @@ fun MantenimientosScreen(
                             Text("Finalizar")
                         }
                     }
+
+                    TextButton(
+                        onClick = {
+                            onDocumentos(mantenimiento)
+                        }
+                    ) {
+                        Text("Documentos")
+                    }
                 }
             }
         }
@@ -506,6 +517,122 @@ fun MantenimientosScreen(
                 }
             }
         )
+    }
+}
+
+
+@Composable
+fun DocumentosScreen(
+    vm: FacilityViewModel,
+    mantenimientoId: Long,
+    titulo: String,
+    onBack: () -> Unit
+) {
+    // Evita abrir dos selectores con toques repetidos.
+    var selectorAbierto by remember {
+        mutableStateOf(false)
+    }
+
+    val selector = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        selectorAbierto = false
+
+        if (uri != null) {
+            vm.subirDocumento(mantenimientoId, uri)
+        }
+    }
+
+    LaunchedEffect(mantenimientoId) {
+        vm.cargarDocumentos(mantenimientoId)
+    }
+
+    ScreenScaffold(
+        title = "Documentos",
+        subtitle = titulo,
+        onAction = onBack,
+        scrollable = true
+    ) {
+        Button(
+            onClick = {
+                if (!selectorAbierto) {
+                    selectorAbierto = true
+                    selector.launch(TIPOS_DOCUMENTO)
+                }
+            },
+            enabled = !vm.loading && !selectorAbierto
+        ) {
+            Text("Adjuntar archivo")
+        }
+
+        Text(
+            text = "PDF, JPEG o PNG · máximo 20 MB",
+            style = MaterialTheme.typography.bodySmall
+        )
+
+        if (vm.loading) {
+            LinearProgressIndicator(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp)
+            )
+        }
+
+        vm.error?.let { error ->
+            Text(
+                text = error,
+                color = MaterialTheme.colorScheme.error
+            )
+        }
+
+        Spacer(
+            modifier = Modifier.height(18.dp)
+        )
+
+        SectionTitle("Documentos adjuntos")
+
+        if (vm.documentos.isEmpty() && !vm.loading && vm.error == null) {
+            Text("Sin documentos")
+        }
+
+        vm.documentos.forEach { documento ->
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 5.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(14.dp)
+                ) {
+                    Text(
+                        text = documento.nombreOriginal,
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    Text(
+                        text = "Estado: ${documento.estadoRevision}"
+                    )
+
+                    documento.fechaSubida?.let { fechaSubida ->
+                        Text(
+                            text = "Subido: ${fechaSubida.take(16).replace('T', ' ')}"
+                        )
+                    }
+
+                    documento.tipoDocumento?.let { tipo ->
+                        Text(
+                            text = "Tipo: $tipo"
+                        )
+                    }
+
+                    documento.observaciones?.let { observaciones ->
+                        Text(
+                            text = observaciones
+                        )
+                    }
+                }
+            }
+        }
     }
 }
 

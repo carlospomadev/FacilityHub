@@ -1,14 +1,19 @@
 package com.facilityhub.app.ui
 
 import android.app.Application
+import android.net.Uri
+import android.provider.OpenableColumns
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.facilityhub.app.data.*
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import retrofit2.HttpException
+import java.io.File
 import java.io.IOException
 import java.time.LocalDate
 
@@ -28,6 +33,7 @@ class FacilityViewModel(application: Application) : AndroidViewModel(application
     var instalaciones by mutableStateOf<List<InstalacionDto>>(emptyList()); private set
     var obligaciones by mutableStateOf<List<ObligacionDto>>(emptyList()); private set
     var mantenimientos by mutableStateOf<List<MantenimientoDto>>(emptyList()); private set
+    var documentos by mutableStateOf<List<DocumentoDto>>(emptyList()); private set
 
     fun login(email: String, password: String, onSuccess: () -> Unit) = run {
         viewModelScope.launch {
@@ -84,9 +90,84 @@ class FacilityViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
+    fun cargarDocumentos(mantenimientoId: Long) {
+        documentos = emptyList()
+        viewModelScope.launch { action { documentos = repository.documentos(mantenimientoId) } }
+    }
+
+    fun subirDocumento(mantenimientoId: Long, uri: Uri) {
+        // Guarda sincrona: el POST no es idempotente y no se reintenta automaticamente.
+        if (loading) return
+        loading = true
+        viewModelScope.launch {
+            action {
+                val documento = withContext(Dispatchers.IO) { prepararDocumento(uri) }
+                try {
+                    repository.subirDocumento(mantenimientoId, documento.nombre, documento.mime, documento.archivo)
+                    documentos = repository.documentos(mantenimientoId)
+                } finally {
+                    withContext(Dispatchers.IO) { documento.archivo.delete() }
+                }
+            }
+        }
+    }
+
+    // Valida tipo y tamano y copia el contenido a un temporal con limite de bytes, sin cargarlo en memoria.
+    private fun prepararDocumento(uri: Uri): DocumentoLocal {
+        val app = getApplication<Application>()
+        val resolver = app.contentResolver
+        var temporal: File? = null
+        try {
+            val mime = resolver.getType(uri)
+            if (mime == null || mime !in TIPOS_DOCUMENTO) {
+                throw DocumentoNoValidoException("Solo se admiten archivos PDF, JPEG o PNG.")
+            }
+
+            var nombre = "documento"
+            var declarado: Long? = null
+            resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE), null, null, null)?.use { cursor ->
+                if (cursor.moveToFirst()) {
+                    val columnaNombre = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                    if (columnaNombre >= 0 && !cursor.isNull(columnaNombre)) nombre = cursor.getString(columnaNombre)
+                    val columnaTamano = cursor.getColumnIndex(OpenableColumns.SIZE)
+                    if (columnaTamano >= 0 && !cursor.isNull(columnaTamano)) declarado = cursor.getLong(columnaTamano)
+                }
+            }
+            val tamano = declarado ?: throw DocumentoNoValidoException("No se pudo determinar el tamaño del archivo.")
+            if (tamano == 0L) throw DocumentoNoValidoException("El archivo está vacío.")
+            if (tamano > MAX_BYTES_DOCUMENTO) throw DocumentoNoValidoException(MENSAJE_TAMANO_MAXIMO)
+
+            val archivo = File.createTempFile("subida_", null, app.cacheDir)
+            temporal = archivo
+            val entrada = resolver.openInputStream(uri)
+                ?: throw DocumentoNoValidoException("No se pudo abrir el archivo seleccionado.")
+            var total = 0L
+            entrada.use { origen ->
+                archivo.outputStream().use { destino ->
+                    val buffer = ByteArray(64 * 1024)
+                    while (true) {
+                        val leidos = origen.read(buffer)
+                        if (leidos < 0) break
+                        total += leidos
+                        // No se confia solo en el tamano declarado por el proveedor.
+                        if (total > MAX_BYTES_DOCUMENTO) throw DocumentoNoValidoException(MENSAJE_TAMANO_MAXIMO)
+                        destino.write(buffer, 0, leidos)
+                    }
+                }
+            }
+            if (total == 0L) throw DocumentoNoValidoException("El archivo está vacío.")
+            return DocumentoLocal(nombre, mime, archivo)
+        } catch (e: Exception) {
+            temporal?.delete()
+            throw e as? DocumentoNoValidoException
+                ?: DocumentoNoValidoException("No se pudo leer el archivo seleccionado.")
+        }
+    }
+
     fun logout() {
         tokenStore.clear(); loggedIn = false; userName = ""; role = ""
         centros = emptyList(); locales = emptyList(); obligaciones = emptyList(); mantenimientos = emptyList()
+        documentos = emptyList()
     }
 
     fun clearError() { error = null }
@@ -98,11 +179,24 @@ class FacilityViewModel(application: Application) : AndroidViewModel(application
     }
 
     private fun mensajeError(e: Exception) = when (e) {
-        is HttpException -> "El servidor rechazó la operación (HTTP ${e.code()})"
+        is HttpException -> when (e.code()) {
+            401, 403 -> "Sesión caducada o sin permiso. Vuelve a iniciar sesión."
+            404 -> "No se encontró el recurso solicitado."
+            413 -> "El servidor rechazó el archivo por superar el tamaño máximo."
+            in 500..599 -> "Error del servidor (HTTP ${e.code()}). Inténtalo más tarde."
+            else -> "El servidor rechazó la operación (HTTP ${e.code()})"
+        }
         is IOException -> "No se pudo conectar con el servidor. Inténtalo de nuevo."
         else -> e.message ?: "Error de comunicacion"
     }
 }
+
+const val MAX_BYTES_DOCUMENTO = 20L * 1024 * 1024
+val TIPOS_DOCUMENTO = arrayOf("application/pdf", "image/jpeg", "image/png")
+private const val MENSAJE_TAMANO_MAXIMO = "El archivo supera el máximo de 20 MB."
+
+private class DocumentoLocal(val nombre: String, val mime: String, val archivo: File)
+private class DocumentoNoValidoException(message: String) : Exception(message)
 
 // Transiciones que ofrece la app; el backend no valida el orden.
 fun siguienteEstado(estado: String): String? = when (estado) {

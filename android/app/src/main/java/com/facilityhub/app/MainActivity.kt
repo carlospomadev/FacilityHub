@@ -279,7 +279,47 @@ fun FacilityHubApp(
 
             MantenimientosScreen(
                 vm = vm,
-                obligacion = obligacion
+                obligacion = obligacion,
+
+                onDocumentos = { mantenimiento ->
+
+                    nav.navigate(
+                        "documentos/${mantenimiento.id}/" +
+                                enc(mantenimiento.descripcion ?: mantenimiento.fechaProgramada)
+                    )
+                }
+            ) {
+                nav.popBackStack()
+            }
+        }
+
+
+        composable(
+            route = "documentos/{mantenimientoId}/{titulo}",
+
+            arguments = listOf(
+
+                navArgument("mantenimientoId") {
+                    type = NavType.LongType
+                },
+
+                navArgument("titulo") {
+                    type = NavType.StringType
+                }
+            )
+        ) { entry ->
+
+            DocumentosScreen(
+                vm = vm,
+
+                mantenimientoId =
+                    entry.arguments!!.getLong("mantenimientoId"),
+
+                titulo =
+                    dec(
+                        entry.arguments!!
+                            .getString("titulo")!!
+                    )
             ) {
                 nav.popBackStack()
             }

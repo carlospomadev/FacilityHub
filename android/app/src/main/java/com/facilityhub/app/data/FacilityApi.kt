@@ -1,9 +1,12 @@
 package com.facilityhub.app.data
 
+import okhttp3.MultipartBody
 import retrofit2.http.Body
 import retrofit2.http.GET
+import retrofit2.http.Multipart
 import retrofit2.http.PATCH
 import retrofit2.http.POST
+import retrofit2.http.Part
 import retrofit2.http.Path
 
 interface FacilityApi {
@@ -33,4 +36,11 @@ interface FacilityApi {
 
     @PATCH("api/mantenimientos/{id}/estado")
     suspend fun cambiarEstadoMantenimiento(@Path("id") mantenimientoId: Long, @Body request: CambiarEstadoMantenimientoRequest): MantenimientoDto
+
+    @GET("api/mantenimientos/{id}/documentos")
+    suspend fun documentos(@Path("id") mantenimientoId: Long): List<DocumentoDto>
+
+    @Multipart
+    @POST("api/mantenimientos/{id}/documentos")
+    suspend fun subirDocumento(@Path("id") mantenimientoId: Long, @Part file: MultipartBody.Part): DocumentoDto
 }
