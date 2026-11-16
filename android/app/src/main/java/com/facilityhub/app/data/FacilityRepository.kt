@@ -17,4 +17,6 @@ class FacilityRepository(private val api: FacilityApi, private val tokenStore: T
     suspend fun mantenimientos(obligacionId: Long) = api.mantenimientos(obligacionId)
     suspend fun crearMantenimiento(obligacionId: Long, fecha: String, descripcion: String?) =
         api.crearMantenimiento(obligacionId, CrearMantenimientoRequest(fecha, descripcion))
+    suspend fun cambiarEstadoMantenimiento(mantenimientoId: Long, estado: String, fechaRealizacion: String?, observaciones: String?) =
+        api.cambiarEstadoMantenimiento(mantenimientoId, CambiarEstadoMantenimientoRequest(estado, fechaRealizacion, observaciones))
 }

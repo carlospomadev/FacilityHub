@@ -2,6 +2,7 @@ package com.facilityhub.app.data
 
 import retrofit2.http.Body
 import retrofit2.http.GET
+import retrofit2.http.PATCH
 import retrofit2.http.POST
 import retrofit2.http.Path
 
@@ -29,4 +30,7 @@ interface FacilityApi {
 
     @POST("api/obligaciones/{id}/mantenimientos")
     suspend fun crearMantenimiento(@Path("id") obligacionId: Long, @Body request: CrearMantenimientoRequest): MantenimientoDto
+
+    @PATCH("api/mantenimientos/{id}/estado")
+    suspend fun cambiarEstadoMantenimiento(@Path("id") mantenimientoId: Long, @Body request: CambiarEstadoMantenimientoRequest): MantenimientoDto
 }

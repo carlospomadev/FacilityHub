@@ -10,3 +10,4 @@ data class InstalacionDto(val id: Long, val nombre: String, val tipo: String, va
 data class ObligacionDto(val id: Long, val localId: Long, val instalacion: String?, val tipoMantenimiento: String, val periodicidadMeses: Int, val proximaFecha: String, val estado: String)
 data class MantenimientoDto(val id: Long, val obligacionId: Long, val fechaProgramada: String, val fechaRealizacion: String?, val estado: String, val descripcion: String?, val observaciones: String?)
 data class CrearMantenimientoRequest(val fechaProgramada: String, val descripcion: String?)
+data class CambiarEstadoMantenimientoRequest(val estado: String, val fechaRealizacion: String?, val observaciones: String?)

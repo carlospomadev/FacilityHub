@@ -4,6 +4,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -316,6 +318,27 @@ fun MantenimientosScreen(
         mutableStateOf("")
     }
 
+    var aFinalizar by remember {
+        mutableStateOf<MantenimientoDto?>(null)
+    }
+
+    // La proxima fecha se toma de las obligaciones recargadas tras finalizar.
+    val proximaFecha =
+        vm.obligaciones.firstOrNull { it.id == obligacion.id }?.proximaFecha
+            ?: obligacion.proximaFecha
+
+    var fechaPorDefecto by remember {
+        mutableStateOf(obligacion.proximaFecha)
+    }
+
+    // El campo Fecha sigue a la proxima fecha solo si el usuario no lo ha editado.
+    LaunchedEffect(proximaFecha) {
+        if (fecha == fechaPorDefecto) {
+            fecha = proximaFecha
+        }
+        fechaPorDefecto = proximaFecha
+    }
+
     LaunchedEffect(obligacion.id) {
         vm.cargarMantenimientos(obligacion.id)
     }
@@ -323,8 +346,24 @@ fun MantenimientosScreen(
     ScreenScaffold(
         title = "Mantenimientos",
         subtitle = obligacion.tipoMantenimiento,
-        onAction = onBack
+        onAction = onBack,
+        scrollable = true
     ) {
+        Text(
+            text = "Próxima fecha: $proximaFecha"
+        )
+
+        vm.error?.let { error ->
+            Text(
+                text = error,
+                color = MaterialTheme.colorScheme.error
+            )
+        }
+
+        Spacer(
+            modifier = Modifier.height(10.dp)
+        )
+
         SectionTitle("Nueva ejecución")
 
         OutlinedTextField(
@@ -397,9 +436,76 @@ fun MantenimientosScreen(
                             text = descripcion
                         )
                     }
+
+                    mantenimiento.fechaRealizacion?.let { fechaRealizacion ->
+                        Text(
+                            text = "Realizado: $fechaRealizacion"
+                        )
+                    }
+
+                    when (siguienteEstado(mantenimiento.estado)) {
+                        "EN_PROCESO" -> OutlinedButton(
+                            onClick = {
+                                vm.cambiarEstadoMantenimiento(
+                                    mantenimiento = mantenimiento,
+                                    nuevoEstado = "EN_PROCESO",
+                                    localId = obligacion.localId
+                                )
+                            },
+                            enabled = !vm.loading
+                        ) {
+                            Text("Iniciar")
+                        }
+
+                        "FINALIZADO" -> Button(
+                            onClick = {
+                                aFinalizar = mantenimiento
+                            },
+                            enabled = !vm.loading
+                        ) {
+                            Text("Finalizar")
+                        }
+                    }
                 }
             }
         }
+    }
+
+    aFinalizar?.let { mantenimiento ->
+        AlertDialog(
+            onDismissRequest = {
+                aFinalizar = null
+            },
+            title = {
+                Text("Finalizar mantenimiento")
+            },
+            text = {
+                Text("Se registrará la fecha de hoy como fecha de realización y se recalculará la próxima fecha.")
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        aFinalizar = null
+                        vm.cambiarEstadoMantenimiento(
+                            mantenimiento = mantenimiento,
+                            nuevoEstado = "FINALIZADO",
+                            localId = obligacion.localId
+                        )
+                    }
+                ) {
+                    Text("Confirmar")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        aFinalizar = null
+                    }
+                ) {
+                    Text("Cancelar")
+                }
+            }
+        )
     }
 }
 
@@ -409,6 +515,7 @@ private fun ScreenScaffold(
     title: String,
     subtitle: String,
     onAction: () -> Unit,
+    scrollable: Boolean = false,
     content: @Composable ColumnScope.() -> Unit
 ) {
     Scaffold(
@@ -456,7 +563,14 @@ private fun ScreenScaffold(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .padding(16.dp),
+                .padding(16.dp)
+                .then(
+                    if (scrollable) {
+                        Modifier.verticalScroll(rememberScrollState())
+                    } else {
+                        Modifier
+                    }
+                ),
             content = content
         )
     }

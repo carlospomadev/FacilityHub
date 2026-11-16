@@ -8,6 +8,9 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.facilityhub.app.data.*
 import kotlinx.coroutines.launch
+import retrofit2.HttpException
+import java.io.IOException
+import java.time.LocalDate
 
 class FacilityViewModel(application: Application) : AndroidViewModel(application) {
     private val tokenStore = TokenStore(application)
@@ -65,6 +68,22 @@ class FacilityViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
+    fun cambiarEstadoMantenimiento(mantenimiento: MantenimientoDto, nuevoEstado: String, localId: Long) {
+        // Misma guarda sincrona que en crearMantenimiento; ademas se valida contra el estado ya cargado.
+        if (loading) return
+        val actual = mantenimientos.firstOrNull { it.id == mantenimiento.id } ?: return
+        if (siguienteEstado(actual.estado) != nuevoEstado) return
+        loading = true
+        viewModelScope.launch {
+            action {
+                val fechaRealizacion = if (nuevoEstado == "FINALIZADO") LocalDate.now().toString() else null
+                repository.cambiarEstadoMantenimiento(actual.id, nuevoEstado, fechaRealizacion, actual.observaciones)
+                mantenimientos = repository.mantenimientos(actual.obligacionId)
+                obligaciones = repository.obligaciones(localId)
+            }
+        }
+    }
+
     fun logout() {
         tokenStore.clear(); loggedIn = false; userName = ""; role = ""
         centros = emptyList(); locales = emptyList(); obligaciones = emptyList(); mantenimientos = emptyList()
@@ -74,7 +93,20 @@ class FacilityViewModel(application: Application) : AndroidViewModel(application
 
     private suspend fun action(block: suspend () -> Unit) {
         loading = true; error = null
-        try { block() } catch (e: Exception) { error = e.message ?: "Error de comunicacion" }
+        try { block() } catch (e: Exception) { error = mensajeError(e) }
         finally { loading = false }
     }
+
+    private fun mensajeError(e: Exception) = when (e) {
+        is HttpException -> "El servidor rechazó la operación (HTTP ${e.code()})"
+        is IOException -> "No se pudo conectar con el servidor. Inténtalo de nuevo."
+        else -> e.message ?: "Error de comunicacion"
+    }
+}
+
+// Transiciones que ofrece la app; el backend no valida el orden.
+fun siguienteEstado(estado: String): String? = when (estado) {
+    "PROGRAMADO", "PENDIENTE" -> "EN_PROCESO"
+    "EN_PROCESO" -> "FINALIZADO"
+    else -> null
 }
