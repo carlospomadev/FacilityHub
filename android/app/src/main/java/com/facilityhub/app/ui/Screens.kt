@@ -644,6 +644,145 @@ fun DocumentosScreen(
 }
 
 
+private const val TITULO_MIS_TRABAJOS = "Mis trabajos"
+
+// FH-006 / P6-B: trabajos asignados a la empresa del PROVEEDOR. Solo lectura: no hay botones de escritura;
+// las acciones futuras (P6-C) se mostraran unicamente si el backend las incluye en accionesPermitidas.
+@Composable
+fun TrabajosScreen(
+    vm: FacilityViewModel,
+    onTrabajo: (TrabajoProveedorDto) -> Unit,
+    onLogout: () -> Unit
+) {
+    LaunchedEffect(Unit) {
+        vm.cargarTrabajos()
+    }
+
+    ScreenScaffold(
+        title = TITULO_MIS_TRABAJOS,
+        subtitle = "${vm.userName} · ${vm.role}",
+        onAction = onLogout
+    ) {
+        if (vm.loading) {
+            LinearProgressIndicator(
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+
+        vm.error?.let { error ->
+            Text(
+                text = error,
+                color = MaterialTheme.colorScheme.error
+            )
+        }
+
+        if (!vm.loading && vm.trabajos.isEmpty() && vm.error == null) {
+            Text(
+                text = "No tienes trabajos asignados."
+            )
+        }
+
+        LazyColumn(
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            items(vm.trabajos) { trabajo ->
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            onTrabajo(trabajo)
+                        }
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp)
+                    ) {
+                        Text(
+                            text = "${trabajo.fechaProgramada} · ${trabajo.estado}",
+                            fontWeight = FontWeight.Bold
+                        )
+
+                        Text(
+                            text = trabajo.tipoMantenimiento
+                        )
+
+                        Text(
+                            text = listOfNotNull(
+                                trabajo.centro,
+                                trabajo.local ?: "Zona común"
+                            ).joinToString(" · "),
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+
+@Composable
+fun TrabajoDetalleScreen(
+    vm: FacilityViewModel,
+    mantenimientoId: Long,
+    onBack: () -> Unit
+) {
+    LaunchedEffect(mantenimientoId) {
+        vm.cargarTrabajo(mantenimientoId)
+    }
+
+    ScreenScaffold(
+        title = "Trabajo",
+        subtitle = vm.trabajo?.tipoMantenimiento ?: "",
+        onAction = onBack,
+        scrollable = true
+    ) {
+        if (vm.loading) {
+            LinearProgressIndicator(
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+
+        vm.error?.let { error ->
+            Text(
+                text = error,
+                color = MaterialTheme.colorScheme.error
+            )
+        }
+
+        vm.trabajo?.let { trabajo ->
+            SectionTitle("Datos del trabajo")
+
+            Text(text = "Fecha programada: ${trabajo.fechaProgramada}")
+            Text(text = "Estado: ${trabajo.estado}")
+            trabajo.descripcion?.let { Text(text = "Descripción: $it") }
+
+            Spacer(modifier = Modifier.height(12.dp))
+            SectionTitle("Ubicación")
+
+            Text(text = "Centro: ${trabajo.centro}")
+            Text(text = "Local: ${trabajo.local ?: "Zona común"}")
+            trabajo.instalacion?.let { Text(text = "Instalación: $it") }
+
+            Spacer(modifier = Modifier.height(12.dp))
+            SectionTitle("Asignación")
+
+            Text(text = "Responsable contractual: ${trabajo.responsable}")
+            trabajo.tecnicoAsignado?.let { Text(text = "Técnico asignado: $it") }
+            trabajo.asignadoAt?.let { Text(text = "Asignado: ${it.take(16).replace('T', ' ')}") }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            if (trabajo.accionesPermitidas.isNullOrEmpty()) {
+                Text(
+                    text = "Consulta: no hay acciones disponibles para este trabajo.",
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+        }
+    }
+}
+
+
 @Composable
 private fun ScreenScaffold(
     title: String,
@@ -681,7 +820,8 @@ private fun ScreenScaffold(
                         onClick = onAction
                     ) {
                         Text(
-                            if (title == "Centros") {
+                            // Pantallas raiz por rol (Centros, Mis trabajos): "Salir"; el resto: "Volver".
+                            if (title == "Centros" || title == TITULO_MIS_TRABAJOS) {
                                 "Salir"
                             } else {
                                 "Volver"

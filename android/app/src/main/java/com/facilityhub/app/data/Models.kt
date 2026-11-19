@@ -11,4 +11,19 @@ data class ObligacionDto(val id: Long, val localId: Long, val instalacion: Strin
 data class MantenimientoDto(val id: Long, val obligacionId: Long, val fechaProgramada: String, val fechaRealizacion: String?, val estado: String, val descripcion: String?, val observaciones: String?)
 data class CrearMantenimientoRequest(val fechaProgramada: String, val descripcion: String?)
 data class CambiarEstadoMantenimientoRequest(val estado: String, val fechaRealizacion: String?, val observaciones: String?)
+// FH-006 / P6-B: trabajo asignado al PROVEEDOR (solo lectura; las acciones las decide el backend).
+data class TrabajoProveedorDto(
+    val mantenimientoId: Long,
+    val fechaProgramada: String,
+    val estado: String,
+    val descripcion: String?,
+    val tipoMantenimiento: String,
+    val centro: String,
+    val local: String?,
+    val instalacion: String?,
+    val responsable: String,
+    val tecnicoAsignado: String?,
+    val asignadoAt: String?,
+    val accionesPermitidas: List<String>?
+)
 data class DocumentoDto(val id: Long, val mantenimientoId: Long, val nombreOriginal: String, val tipoDocumento: String?, val fechaDocumento: String?, val fechaCaducidad: String?, val estadoRevision: String, val observaciones: String?, val fechaSubida: String?)

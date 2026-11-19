@@ -30,6 +30,12 @@ class FacilityViewModel(application: Application) : AndroidViewModel(application
     // Acciones de escritura solo para gestion; rol vacio o desconocido = sin acciones (el backend sigue siendo la barrera real).
     val puedeGestionar: Boolean get() = role in ROLES_GESTION
 
+    // FH-006 / P6-B: el PROVEEDOR solo accede a sus trabajos asignados; nunca a centros ni locales.
+    val esProveedor: Boolean get() = role == ROL_PROVEEDOR
+
+    // Pantalla inicial segun el rol (la navegacion por rol no sustituye a los controles del backend).
+    val rutaInicio: String get() = if (esProveedor) "trabajos" else "centros"
+
     var centros by mutableStateOf<List<CentroDto>>(emptyList()); private set
     var locales by mutableStateOf<List<LocalDto>>(emptyList()); private set
     var inquilino by mutableStateOf<InquilinoDto?>(null); private set
@@ -37,16 +43,29 @@ class FacilityViewModel(application: Application) : AndroidViewModel(application
     var obligaciones by mutableStateOf<List<ObligacionDto>>(emptyList()); private set
     var mantenimientos by mutableStateOf<List<MantenimientoDto>>(emptyList()); private set
     var documentos by mutableStateOf<List<DocumentoDto>>(emptyList()); private set
+    var trabajos by mutableStateOf<List<TrabajoProveedorDto>>(emptyList()); private set
+    var trabajo by mutableStateOf<TrabajoProveedorDto?>(null); private set
 
     fun login(email: String, password: String, onSuccess: () -> Unit) = run {
         viewModelScope.launch {
             action {
                 val result = repository.login(email, password)
                 loggedIn = true; userName = result.nombre; role = result.rol
-                centros = repository.centros()
+                if (esProveedor) {
+                    trabajos = repository.trabajos()
+                } else {
+                    centros = repository.centros()
+                }
                 onSuccess()
             }
         }
+    }
+
+    fun cargarTrabajos() = viewModelScope.launch { action { trabajos = repository.trabajos() } }
+
+    fun cargarTrabajo(mantenimientoId: Long) {
+        trabajo = null
+        viewModelScope.launch { action { trabajo = repository.trabajo(mantenimientoId) } }
     }
 
     fun cargarCentros() = viewModelScope.launch { action { centros = repository.centros() } }
@@ -170,7 +189,7 @@ class FacilityViewModel(application: Application) : AndroidViewModel(application
     fun logout() {
         tokenStore.clear(); loggedIn = false; userName = ""; role = ""
         centros = emptyList(); locales = emptyList(); obligaciones = emptyList(); mantenimientos = emptyList()
-        documentos = emptyList()
+        documentos = emptyList(); trabajos = emptyList(); trabajo = null
     }
 
     fun clearError() { error = null }
@@ -196,6 +215,7 @@ class FacilityViewModel(application: Application) : AndroidViewModel(application
 }
 
 private val ROLES_GESTION = setOf("ADMIN", "EXPLOTACION")
+private const val ROL_PROVEEDOR = "PROVEEDOR"
 
 const val MAX_BYTES_DOCUMENTO = 20L * 1024 * 1024
 val TIPOS_DOCUMENTO = arrayOf("application/pdf", "image/jpeg", "image/png")

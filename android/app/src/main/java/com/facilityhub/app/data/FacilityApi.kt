@@ -43,4 +43,11 @@ interface FacilityApi {
     @Multipart
     @POST("api/mantenimientos/{id}/documentos")
     suspend fun subirDocumento(@Path("id") mantenimientoId: Long, @Part file: MultipartBody.Part): DocumentoDto
+
+    // FH-006 / P6-B: trabajos del PROVEEDOR autenticado.
+    @GET("api/proveedor/trabajos")
+    suspend fun trabajos(): List<TrabajoProveedorDto>
+
+    @GET("api/proveedor/trabajos/{id}")
+    suspend fun trabajo(@Path("id") mantenimientoId: Long): TrabajoProveedorDto
 }

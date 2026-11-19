@@ -26,6 +26,8 @@ class FacilityRepository(private val api: FacilityApi, private val tokenStore: T
         api.cambiarEstadoMantenimiento(mantenimientoId, CambiarEstadoMantenimientoRequest(estado, fechaRealizacion, observaciones))
 
     suspend fun documentos(mantenimientoId: Long) = api.documentos(mantenimientoId)
+    suspend fun trabajos() = api.trabajos()
+    suspend fun trabajo(mantenimientoId: Long) = api.trabajo(mantenimientoId)
     // El cuerpo se envia en streaming desde el archivo; el backend espera la parte multipart "file".
     suspend fun subirDocumento(mantenimientoId: Long, nombre: String, mime: String, archivo: File) =
         api.subirDocumento(mantenimientoId, MultipartBody.Part.createFormData("file", nombre, archivo.asRequestBody(mime.toMediaType())))

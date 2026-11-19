@@ -74,9 +74,10 @@ fun FacilityHubApp(
 
     val nav = rememberNavController()
 
+    // FH-006 / P6-B: pantalla inicial por rol (PROVEEDOR -> "trabajos"; el resto -> "centros").
     val start =
         if (vm.loggedIn) {
-            "centros"
+            vm.rutaInicio
         } else {
             "login"
         }
@@ -90,12 +91,52 @@ fun FacilityHubApp(
 
             LoginScreen(vm) {
 
-                nav.navigate("centros") {
+                nav.navigate(vm.rutaInicio) {
 
                     popUpTo("login") {
                         inclusive = true
                     }
                 }
+            }
+        }
+
+
+        composable("trabajos") {
+
+            TrabajosScreen(
+                vm = vm,
+
+                onTrabajo = { trabajo ->
+                    nav.navigate("trabajo/${trabajo.mantenimientoId}")
+                },
+
+                onLogout = {
+
+                    vm.logout()
+
+                    nav.navigate("login") {
+                        popUpTo(0)
+                    }
+                }
+            )
+        }
+
+
+        composable(
+            route = "trabajo/{mantenimientoId}",
+
+            arguments = listOf(
+                navArgument("mantenimientoId") {
+                    type = NavType.LongType
+                }
+            )
+        ) { entry ->
+
+            TrabajoDetalleScreen(
+                vm = vm,
+                mantenimientoId = entry.arguments!!.getLong("mantenimientoId")
+            ) {
+                nav.popBackStack()
             }
         }
 
