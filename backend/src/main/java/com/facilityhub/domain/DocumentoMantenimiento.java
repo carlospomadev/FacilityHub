@@ -17,6 +17,7 @@ public class DocumentoMantenimiento {
     @Enumerated(EnumType.STRING) @Column(name = "estado_revision", nullable = false, length = 20) private EstadoRevisionDocumento estadoRevision = EstadoRevisionDocumento.PENDIENTE;
     @Column(columnDefinition = "text") private String observaciones;
     @Column(name = "fecha_subida", nullable = false) private LocalDateTime fechaSubida;
+    @Enumerated(EnumType.STRING) @Column(nullable = false, length = 20) private VisibilidadDocumento visibilidad = VisibilidadDocumento.INTERNO;
 
     protected DocumentoMantenimiento() {}
 
@@ -33,6 +34,7 @@ public class DocumentoMantenimiento {
         this.fechaCaducidad = fechaCaducidad;
         this.estadoRevision = EstadoRevisionDocumento.PENDIENTE;
         this.fechaSubida = LocalDateTime.now();
+        this.visibilidad = VisibilidadDocumento.INTERNO;
     }
 
     public Long getId() { return id; }
@@ -45,9 +47,21 @@ public class DocumentoMantenimiento {
     public EstadoRevisionDocumento getEstadoRevision() { return estadoRevision; }
     public String getObservaciones() { return observaciones; }
     public LocalDateTime getFechaSubida() { return fechaSubida; }
+    public VisibilidadDocumento getVisibilidad() { return visibilidad; }
 
     public void revisar(EstadoRevisionDocumento estadoRevision, String observaciones) {
         this.estadoRevision = estadoRevision;
         this.observaciones = observaciones;
+        // Un documento que deja de ser VALIDO pierde la publicacion; volver a VALIDO no lo republica.
+        if (estadoRevision != EstadoRevisionDocumento.VALIDO) {
+            this.visibilidad = VisibilidadDocumento.INTERNO;
+        }
+    }
+
+    public void cambiarVisibilidad(VisibilidadDocumento visibilidad) {
+        if (visibilidad == VisibilidadDocumento.COMPARTIDO && estadoRevision != EstadoRevisionDocumento.VALIDO) {
+            throw new IllegalArgumentException("Solo se pueden compartir documentos en estado VALIDO");
+        }
+        this.visibilidad = visibilidad;
     }
 }

@@ -93,7 +93,7 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.GET, "/api/mantenimientos/**", "/api/documentos/*/archivo")
                     .hasAnyRole("ADMIN", "EXPLOTACION", "INQUILINO")
                 .requestMatchers(HttpMethod.POST, "/api/mantenimientos/*/documentos")
-                    .hasAnyRole("ADMIN", "EXPLOTACION", "INQUILINO")
+                    .hasAnyRole("ADMIN", "EXPLOTACION")
                 .requestMatchers(HttpMethod.PATCH, "/api/mantenimientos/**", "/api/documentos/**")
                     .hasAnyRole("ADMIN", "EXPLOTACION")
                 .requestMatchers("/api/mantenimientos/**", "/api/documentos/**")

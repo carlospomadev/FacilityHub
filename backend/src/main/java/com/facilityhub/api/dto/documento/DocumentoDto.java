@@ -12,5 +12,6 @@ public record DocumentoDto(
     LocalDate fechaCaducidad,
     String estadoRevision,
     String observaciones,
-    LocalDateTime fechaSubida
-) {}
+    LocalDateTime fechaSubida,
+    String visibilidad
+) implements DocumentoRespuesta {}

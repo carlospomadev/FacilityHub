@@ -1,8 +1,10 @@
 package com.facilityhub.api;
 
+import com.facilityhub.service.RecursoNoDisponibleException;
 import com.facilityhub.service.RecursoNoEncontradoException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -14,6 +16,20 @@ public class ApiExceptionHandler {
     public ProblemDetail notFound(RecursoNoEncontradoException ex) {
         ProblemDetail detail = ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
         detail.setTitle("Recurso no encontrado");
+        return detail;
+    }
+
+    @ExceptionHandler(RecursoNoDisponibleException.class)
+    public ProblemDetail noDisponible(RecursoNoDisponibleException ex) {
+        ProblemDetail detail = ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, "Recurso no encontrado");
+        detail.setTitle("Recurso no encontrado");
+        return detail;
+    }
+
+    @ExceptionHandler(AccessDeniedException.class)
+    public ProblemDetail forbidden(AccessDeniedException ex) {
+        ProblemDetail detail = ProblemDetail.forStatusAndDetail(HttpStatus.FORBIDDEN, "Operacion no permitida");
+        detail.setTitle("Acceso denegado");
         return detail;
     }
 
