@@ -9,8 +9,10 @@ import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
+import java.security.Principal;
 import java.util.List;
 
+// La identidad sale del token autenticado (subject = email), nunca de parametros del cliente.
 @RestController
 public class ObligacionController {
     private final ObligacionService obligacionService;
@@ -22,19 +24,25 @@ public class ObligacionController {
     }
 
     @GetMapping("/api/locales/{localId}/obligaciones")
-    public List<ObligacionDto> listarPorLocal(@PathVariable Long localId) {
-        return obligacionService.listarPorLocal(localId);
+    public List<ObligacionDto> listarPorLocal(@PathVariable Long localId, Principal principal) {
+        return obligacionService.listarPorLocal(localId, email(principal));
     }
 
+    // Gestion recibe MantenimientoDto; INQUILINO, MantenimientoInquilinoDto (sin observaciones).
     @GetMapping("/api/obligaciones/{obligacionId}/mantenimientos")
-    public List<MantenimientoDto> listarMantenimientos(@PathVariable Long obligacionId) {
-        return mantenimientoService.listarPorObligacion(obligacionId);
+    public List<?> listarMantenimientos(@PathVariable Long obligacionId, Principal principal) {
+        return mantenimientoService.listarPorObligacion(obligacionId, email(principal));
     }
 
     @PostMapping("/api/obligaciones/{obligacionId}/mantenimientos")
     @ResponseStatus(HttpStatus.CREATED)
     public MantenimientoDto crearMantenimiento(@PathVariable Long obligacionId,
-                                                @Valid @RequestBody CrearMantenimientoRequest request) {
-        return mantenimientoService.crear(obligacionId, request);
+                                                @Valid @RequestBody CrearMantenimientoRequest request,
+                                                Principal principal) {
+        return mantenimientoService.crear(obligacionId, request, email(principal));
+    }
+
+    private static String email(Principal principal) {
+        return principal == null ? null : principal.getName();
     }
 }

@@ -33,7 +33,12 @@ management:
         include: health,info
   endpoint:
     health:
-      show-details: always
+      # FH-005A2-E: solo el estado agregado, sin detalles ni componentes, tambien para usuarios autenticados.
+      show-details: never
+      show-components: never
+      # Sin grupos liveness/readiness (activos por defecto en Boot 4): la raiz solo devuelve "status".
+      probes:
+        enabled: false
 
 security:
   jwt:
