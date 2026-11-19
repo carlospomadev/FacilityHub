@@ -24,6 +24,7 @@ public class DocumentoAutorizacionService {
     static final String ROL_ADMIN = "ADMIN";
     static final String ROL_EXPLOTACION = "EXPLOTACION";
     static final String ROL_INQUILINO = "INQUILINO";
+    static final String ROL_PROVEEDOR = "PROVEEDOR";
 
     private final UsuarioRepository usuarioRepository;
     private final OcupacionLocalRepository ocupacionRepository;
@@ -90,9 +91,37 @@ public class DocumentoAutorizacionService {
         return Optional.of(inquilino.getId());
     }
 
+    // FH-006: solo ADMIN (alta y baja de proveedores y tecnicos, D-1).
+    public boolean esAdmin(Usuario usuario) {
+        return ROL_ADMIN.equals(rol(usuario));
+    }
+
+    public void exigirAdmin(Usuario usuario) {
+        if (!esAdmin(usuario)) {
+            throw new AccessDeniedException("Operacion no permitida");
+        }
+    }
+
+    public boolean esProveedor(Usuario usuario) {
+        return ROL_PROVEEDOR.equals(rol(usuario));
+    }
+
+    // FH-006: id de la empresa con la que filtrar trabajos. Vacio si el rol vigente no es PROVEEDOR
+    // o si la empresa no existe o esta dada de baja (en ese caso el tecnico no ve ningun trabajo).
+    public Optional<Long> proveedorConAcceso(Usuario usuario) {
+        if (!esProveedor(usuario) || usuario.getProveedor() == null || !usuario.getProveedor().isActivo()) {
+            return Optional.empty();
+        }
+        return Optional.of(usuario.getProveedor().getId());
+    }
+
     public boolean puedeLeerMantenimiento(Usuario usuario, Mantenimiento mantenimiento) {
         if (esGestion(usuario)) {
             return true;
+        }
+        // FH-006: obligaciones de zona comun (sin local) no dan acceso al inquilino.
+        if (mantenimiento.getObligacion().getLocal() == null) {
+            return false;
         }
         return puedeAccederLocal(usuario, mantenimiento.getObligacion().getLocal().getId());
     }

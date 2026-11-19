@@ -10,4 +10,8 @@ public interface UsuarioRepository extends JpaRepository<Usuario, Long> {
 
     @EntityGraph(attributePaths = "rol")
     Optional<Usuario> findByEmailAndActivoTrue(String email);
+
+    boolean existsByEmailIgnoreCase(String email);
+
+    java.util.List<Usuario> findByProveedorIdOrderByNombreAsc(Long proveedorId);
 }

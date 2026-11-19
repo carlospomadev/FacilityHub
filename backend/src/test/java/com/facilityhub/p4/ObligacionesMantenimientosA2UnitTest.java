@@ -76,7 +76,7 @@ class ObligacionesMantenimientosA2UnitTest {
         obligacionRepository = mock(ObligacionMantenimientoRepository.class);
         mantenimientoRepository = mock(MantenimientoRepository.class);
         DocumentoAutorizacionService autorizacion = new DocumentoAutorizacionService(usuarioRepository, ocupacionRepository, RELOJ);
-        obligacionService = new ObligacionService(localRepository, obligacionRepository, autorizacion);
+        obligacionService = new ObligacionService(localRepository, obligacionRepository, ocupacionRepository, autorizacion);
         mantenimientoService = new MantenimientoService(mantenimientoRepository, obligacionRepository, autorizacion);
 
         // existeOcupacionVigente ya incluye ocupacion activa y vigente, local activo y centro activo (B1).

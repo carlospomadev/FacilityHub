@@ -16,6 +16,10 @@ public class Mantenimiento {
     @Column(columnDefinition = "text") private String observaciones;
     @Column(name = "created_at", nullable = false) private LocalDateTime createdAt;
     @Column(name = "updated_at", nullable = false) private LocalDateTime updatedAt;
+    // FH-006: bloqueo optimista (409 ante modificaciones concurrentes).
+    @Version @Column(nullable = false) private long version;
+    // FH-006: FALSE en los registros P5 (historico sin validacion P6); TRUE en los nuevos.
+    @Column(name = "validacion_requerida", nullable = false) private boolean validacionRequerida = true;
 
     protected Mantenimiento() {}
 
@@ -35,6 +39,15 @@ public class Mantenimiento {
     public EstadoMantenimiento getEstado() { return estado; }
     public String getDescripcion() { return descripcion; }
     public String getObservaciones() { return observaciones; }
+    public long getVersion() { return version; }
+    public boolean isValidacionRequerida() { return validacionRequerida; }
+
+    // FH-006: estados en los que un mantenimiento admite (re)asignacion de proveedor.
+    public boolean admiteAsignacion() {
+        return estado == EstadoMantenimiento.PROGRAMADO
+            || estado == EstadoMantenimiento.PENDIENTE
+            || estado == EstadoMantenimiento.EN_PROCESO;
+    }
 
     public void cambiarEstado(EstadoMantenimiento nuevoEstado, LocalDate fechaRealizacion, String observaciones) {
         if (nuevoEstado == EstadoMantenimiento.FINALIZADO && fechaRealizacion == null) {

@@ -1,6 +1,9 @@
 package com.facilityhub.api;
 
+import com.facilityhub.service.ConflictoException;
 import com.facilityhub.service.RecursoNoDisponibleException;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.OptimisticLockingFailureException;
 import com.facilityhub.service.RecursoNoEncontradoException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
@@ -23,6 +26,23 @@ public class ApiExceptionHandler {
     public ProblemDetail noDisponible(RecursoNoDisponibleException ex) {
         ProblemDetail detail = ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, "Recurso no encontrado");
         detail.setTitle("Recurso no encontrado");
+        return detail;
+    }
+
+    // FH-006: conflictos de estado, de unicidad (p. ej. dos asignaciones activas) o de version concurrente.
+    // El detalle de integridad no se expone: puede contener nombres internos de restricciones o valores.
+    @ExceptionHandler(ConflictoException.class)
+    public ProblemDetail conflicto(ConflictoException ex) {
+        ProblemDetail detail = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
+        detail.setTitle("Conflicto");
+        return detail;
+    }
+
+    @ExceptionHandler({DataIntegrityViolationException.class, OptimisticLockingFailureException.class})
+    public ProblemDetail conflictoPersistencia(Exception ex) {
+        ProblemDetail detail = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT,
+            "El recurso fue modificado o la operacion entra en conflicto con su estado actual");
+        detail.setTitle("Conflicto");
         return detail;
     }
 

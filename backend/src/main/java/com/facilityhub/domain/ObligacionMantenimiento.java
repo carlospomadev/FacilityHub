@@ -8,7 +8,10 @@ import java.time.LocalDateTime;
 @Table(name = "obligaciones_mantenimiento", schema = "facilityhub")
 public class ObligacionMantenimiento {
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY) private Long id;
-    @ManyToOne(fetch = FetchType.LAZY, optional = false) @JoinColumn(name = "local_id") private LocalComercial local;
+    // FH-006: centro obligatorio; local NULL = zona comun. Responsable contractual explicito (NHOOD / INQUILINO).
+    @ManyToOne(fetch = FetchType.LAZY, optional = false) @JoinColumn(name = "centro_id") private Centro centro;
+    @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "local_id") private LocalComercial local;
+    @Enumerated(EnumType.STRING) @Column(nullable = false, length = 20) private ResponsableObligacion responsable;
     @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "instalacion_id") private Instalacion instalacion;
     @ManyToOne(fetch = FetchType.LAZY, optional = false) @JoinColumn(name = "tipo_mantenimiento_id") private TipoMantenimiento tipoMantenimiento;
     @Column(name = "fecha_inicio", nullable = false) private LocalDate fechaInicio;
@@ -20,7 +23,21 @@ public class ObligacionMantenimiento {
 
     protected ObligacionMantenimiento() {}
     public Long getId() { return id; }
+    public Centro getCentro() { return centro; }
     public LocalComercial getLocal() { return local; }
+    public ResponsableObligacion getResponsable() { return responsable; }
+    public boolean esZonaComun() { return local == null; }
+
+    // La validacion de negocio (ocupacion vigente para INQUILINO) la hace el servicio; la BD impide INQUILINO sin local.
+    public void cambiarResponsable(ResponsableObligacion responsable) {
+        if (responsable == null) {
+            throw new IllegalArgumentException("El responsable es obligatorio");
+        }
+        if (responsable == ResponsableObligacion.INQUILINO && local == null) {
+            throw new IllegalArgumentException("Una obligacion de zona comun no puede ser responsabilidad del inquilino");
+        }
+        this.responsable = responsable;
+    }
     public Instalacion getInstalacion() { return instalacion; }
     public TipoMantenimiento getTipoMantenimiento() { return tipoMantenimiento; }
     public LocalDate getFechaInicio() { return fechaInicio; }

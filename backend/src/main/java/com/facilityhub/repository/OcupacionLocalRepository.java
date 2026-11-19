@@ -29,4 +29,16 @@ public interface OcupacionLocalRepository extends JpaRepository<OcupacionLocal, 
     boolean existeOcupacionVigente(@Param("localId") Long localId,
                                    @Param("inquilinoId") Long inquilinoId,
                                    @Param("hoy") LocalDate hoy);
+
+    // FH-006: el local tiene alguna ocupacion vigente (de cualquier inquilino). Requisito para que una
+    // obligacion pase a responsabilidad INQUILINO.
+    @Query("""
+        select count(o) > 0 from OcupacionLocal o
+          join o.local l
+        where l.id = :localId
+          and o.activo = true
+          and o.fechaInicio <= :hoy
+          and (o.fechaFin is null or o.fechaFin >= :hoy)
+        """)
+    boolean existeOcupacionVigenteDelLocal(@Param("localId") Long localId, @Param("hoy") LocalDate hoy);
 }

@@ -1,5 +1,6 @@
 package com.facilityhub.api;
 
+import com.facilityhub.api.dto.CambiarResponsableRequest;
 import com.facilityhub.api.dto.CrearMantenimientoRequest;
 import com.facilityhub.api.dto.MantenimientoDto;
 import com.facilityhub.api.dto.ObligacionDto;
@@ -40,6 +41,14 @@ public class ObligacionController {
                                                 @Valid @RequestBody CrearMantenimientoRequest request,
                                                 Principal principal) {
         return mantenimientoService.crear(obligacionId, request, email(principal));
+    }
+
+    // FH-006 / P6-B: cambio del responsable contractual (ADMIN y EXPLOTACION).
+    @PatchMapping("/api/obligaciones/{obligacionId}/responsable")
+    public ObligacionDto cambiarResponsable(@PathVariable Long obligacionId,
+                                            @Valid @RequestBody CambiarResponsableRequest request,
+                                            Principal principal) {
+        return obligacionService.cambiarResponsable(obligacionId, request.responsable(), email(principal));
     }
 
     private static String email(Principal principal) {

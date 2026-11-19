@@ -86,9 +86,18 @@ public class SecurityConfig {
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/api/auth/**", "/actuator/health").permitAll()
+                // FH-006: PROVEEDOR solo accede a sus trabajos; nunca a centros, locales, obligaciones ni mantenimientos.
+                .requestMatchers(HttpMethod.GET, "/api/proveedor/trabajos", "/api/proveedor/trabajos/*")
+                    .hasRole("PROVEEDOR")
+                .requestMatchers(HttpMethod.GET, "/api/proveedores", "/api/proveedores/*")
+                    .hasAnyRole("ADMIN", "EXPLOTACION")
+                .requestMatchers("/api/proveedores/**")
+                    .hasRole("ADMIN")
                 .requestMatchers(HttpMethod.GET, "/api/centros/**", "/api/locales/**", "/api/obligaciones/**")
                     .hasAnyRole("ADMIN", "EXPLOTACION", "INQUILINO")
                 .requestMatchers(HttpMethod.POST, "/api/obligaciones/**")
+                    .hasAnyRole("ADMIN", "EXPLOTACION")
+                .requestMatchers(HttpMethod.PATCH, "/api/obligaciones/*/responsable")
                     .hasAnyRole("ADMIN", "EXPLOTACION")
                 .requestMatchers(HttpMethod.GET, "/api/mantenimientos/**", "/api/documentos/*/archivo")
                     .hasAnyRole("ADMIN", "EXPLOTACION", "INQUILINO")
@@ -98,6 +107,8 @@ public class SecurityConfig {
                     .hasAnyRole("ADMIN", "EXPLOTACION")
                 .requestMatchers("/api/mantenimientos/**", "/api/documentos/**")
                     .hasAnyRole("ADMIN", "EXPLOTACION")
+                // FH-006: cualquier otra ruta de API queda denegada por defecto.
+                .requestMatchers("/api/**").denyAll()
                 .anyRequest().authenticated())
             .oauth2ResourceServer(oauth2 -> oauth2
                 .jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter)));

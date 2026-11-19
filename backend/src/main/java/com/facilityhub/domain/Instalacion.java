@@ -7,7 +7,9 @@ import java.time.LocalDateTime;
 @Table(name = "instalaciones", schema = "facilityhub")
 public class Instalacion {
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY) private Long id;
-    @ManyToOne(fetch = FetchType.LAZY, optional = false) @JoinColumn(name = "local_id") private LocalComercial local;
+    // FH-006: la instalacion pertenece a un centro; local NULL = zona comun (coherencia garantizada en BD).
+    @ManyToOne(fetch = FetchType.LAZY, optional = false) @JoinColumn(name = "centro_id") private Centro centro;
+    @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "local_id") private LocalComercial local;
     @Column(nullable = false, length = 120) private String nombre;
     @Column(nullable = false, length = 80) private String tipo;
     @Column(columnDefinition = "text") private String descripcion;
@@ -16,6 +18,7 @@ public class Instalacion {
 
     protected Instalacion() {}
     public Long getId() { return id; }
+    public Centro getCentro() { return centro; }
     public LocalComercial getLocal() { return local; }
     public String getNombre() { return nombre; }
     public String getTipo() { return tipo; }

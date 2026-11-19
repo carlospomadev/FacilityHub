@@ -26,7 +26,8 @@ public class FacilityHubUserDetailsService implements UserDetailsService {
         return User.withUsername(usuario.getEmail())
             .password(usuario.getPasswordHash())
             .roles(usuario.getRol().getCodigo())
-            .disabled(!usuario.isActivo())
+            // FH-006: un tecnico de una empresa proveedora dada de baja no puede iniciar sesion.
+            .disabled(!usuario.isActivo() || (usuario.getProveedor() != null && !usuario.getProveedor().isActivo()))
             .build();
     }
 }

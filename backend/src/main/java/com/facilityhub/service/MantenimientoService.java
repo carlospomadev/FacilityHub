@@ -47,7 +47,8 @@ public class MantenimientoService {
         ObligacionMantenimiento obligacion = obligacionRepository.findById(obligacionId)
             .filter(ObligacionMantenimiento::isActivo)
             .orElseThrow(RecursoNoDisponibleException::new);
-        if (!autorizacion.puedeAccederLocal(usuario, obligacion.getLocal().getId())) {
+        // FH-006: las obligaciones de zona comun (sin local) no son visibles para el inquilino.
+        if (obligacion.getLocal() == null || !autorizacion.puedeAccederLocal(usuario, obligacion.getLocal().getId())) {
             throw new RecursoNoDisponibleException();
         }
         return mantenimientoRepository.findByObligacionIdOrderByFechaProgramadaDesc(obligacionId).stream()
