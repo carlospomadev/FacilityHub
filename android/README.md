@@ -27,7 +27,7 @@ En emulador Android el backend se configura como `http://10.0.2.2:8080/`, que co
 ## Usuario demo recomendado
 
 - Usuario: `explotacion@facilityhub.local`
-- Clave: `TU_PASSWORD_DE_PRUEBA`
+- Clave: `<solicitar al responsable del proyecto>`
 
 ## Estado
 

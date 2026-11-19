@@ -38,7 +38,7 @@ Esta version reúne el modelo de datos, autenticacion/roles y el primer recorrid
 
 ## Usuarios demo
 
-Clave para todos: `TU_PASSWORD_DE_PRUEBA`
+Clave para todos: `<solicitar al responsable del proyecto>`
 
 - `admin@facilityhub.local`
 - `explotacion@facilityhub.local`

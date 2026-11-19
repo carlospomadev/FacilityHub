@@ -33,7 +33,7 @@ Valida:
 4. Ejecutar la app.
 5. Iniciar sesión con:
    - `explotacion@facilityhub.local`
-   - `TU_PASSWORD_DE_PRUEBA`
+   - `<solicitar al responsable del proyecto>`
 6. Abrir Centro Comercial Demo Madrid.
 7. Abrir un local.
 8. Comprobar inquilino, instalaciones y obligaciones.
