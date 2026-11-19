@@ -27,6 +27,9 @@ class FacilityViewModel(application: Application) : AndroidViewModel(application
     var userName by mutableStateOf(tokenStore.userName.orEmpty()); private set
     var role by mutableStateOf(tokenStore.role.orEmpty()); private set
 
+    // Acciones de escritura solo para gestion; rol vacio o desconocido = sin acciones (el backend sigue siendo la barrera real).
+    val puedeGestionar: Boolean get() = role in ROLES_GESTION
+
     var centros by mutableStateOf<List<CentroDto>>(emptyList()); private set
     var locales by mutableStateOf<List<LocalDto>>(emptyList()); private set
     var inquilino by mutableStateOf<InquilinoDto?>(null); private set
@@ -63,7 +66,7 @@ class FacilityViewModel(application: Application) : AndroidViewModel(application
 
     fun crearMantenimiento(obligacionId: Long, fecha: String, descripcion: String?, onCreated: () -> Unit) {
         // Guarda sincrona: se marca ocupado antes de lanzar la corrutina para ignorar toques repetidos.
-        if (loading) return
+        if (loading || !puedeGestionar) return
         loading = true
         viewModelScope.launch {
             action {
@@ -76,7 +79,7 @@ class FacilityViewModel(application: Application) : AndroidViewModel(application
 
     fun cambiarEstadoMantenimiento(mantenimiento: MantenimientoDto, nuevoEstado: String, localId: Long) {
         // Misma guarda sincrona que en crearMantenimiento; ademas se valida contra el estado ya cargado.
-        if (loading) return
+        if (loading || !puedeGestionar) return
         val actual = mantenimientos.firstOrNull { it.id == mantenimiento.id } ?: return
         if (siguienteEstado(actual.estado) != nuevoEstado) return
         loading = true
@@ -97,7 +100,7 @@ class FacilityViewModel(application: Application) : AndroidViewModel(application
 
     fun subirDocumento(mantenimientoId: Long, uri: Uri) {
         // Guarda sincrona: el POST no es idempotente y no se reintenta automaticamente.
-        if (loading) return
+        if (loading || !puedeGestionar) return
         loading = true
         viewModelScope.launch {
             action {
@@ -180,7 +183,8 @@ class FacilityViewModel(application: Application) : AndroidViewModel(application
 
     private fun mensajeError(e: Exception) = when (e) {
         is HttpException -> when (e.code()) {
-            401, 403 -> "Sesión caducada o sin permiso. Vuelve a iniciar sesión."
+            401 -> "Sesión caducada. Vuelve a iniciar sesión."
+            403 -> "No tienes permiso para esta acción."
             404 -> "No se encontró el recurso solicitado."
             413 -> "El servidor rechazó el archivo por superar el tamaño máximo."
             in 500..599 -> "Error del servidor (HTTP ${e.code()}). Inténtalo más tarde."
@@ -190,6 +194,8 @@ class FacilityViewModel(application: Application) : AndroidViewModel(application
         else -> e.message ?: "Error de comunicacion"
     }
 }
+
+private val ROLES_GESTION = setOf("ADMIN", "EXPLOTACION")
 
 const val MAX_BYTES_DOCUMENTO = 20L * 1024 * 1024
 val TIPOS_DOCUMENTO = arrayOf("application/pdf", "image/jpeg", "image/png")

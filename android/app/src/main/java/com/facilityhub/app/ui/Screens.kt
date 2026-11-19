@@ -363,55 +363,58 @@ fun MantenimientosScreen(
             )
         }
 
-        Spacer(
-            modifier = Modifier.height(10.dp)
-        )
+        // Crear ejecuciones solo para gestion (ADMIN/EXPLOTACION); el INQUILINO solo consulta.
+        if (vm.puedeGestionar) {
+            Spacer(
+                modifier = Modifier.height(10.dp)
+            )
 
-        SectionTitle("Nueva ejecución")
+            SectionTitle("Nueva ejecución")
 
-        OutlinedTextField(
-            value = fecha,
-            onValueChange = {
-                fecha = it
-            },
-            label = {
-                Text("Fecha (AAAA-MM-DD)")
-            },
-            modifier = Modifier.fillMaxWidth()
-        )
+            OutlinedTextField(
+                value = fecha,
+                onValueChange = {
+                    fecha = it
+                },
+                label = {
+                    Text("Fecha (AAAA-MM-DD)")
+                },
+                modifier = Modifier.fillMaxWidth()
+            )
 
-        Spacer(
-            modifier = Modifier.height(8.dp)
-        )
+            Spacer(
+                modifier = Modifier.height(8.dp)
+            )
 
-        OutlinedTextField(
-            value = descripcion,
-            onValueChange = {
-                descripcion = it
-            },
-            label = {
-                Text("Descripción")
-            },
-            modifier = Modifier.fillMaxWidth()
-        )
+            OutlinedTextField(
+                value = descripcion,
+                onValueChange = {
+                    descripcion = it
+                },
+                label = {
+                    Text("Descripción")
+                },
+                modifier = Modifier.fillMaxWidth()
+            )
 
-        Spacer(
-            modifier = Modifier.height(10.dp)
-        )
+            Spacer(
+                modifier = Modifier.height(10.dp)
+            )
 
-        Button(
-            onClick = {
-                vm.crearMantenimiento(
-                    obligacionId = obligacion.id,
-                    fecha = fecha,
-                    descripcion = descripcion.ifBlank { null }
-                ) {
-                    descripcion = ""
-                }
-            },
-            enabled = !vm.loading
-        ) {
-            Text("Crear mantenimiento")
+            Button(
+                onClick = {
+                    vm.crearMantenimiento(
+                        obligacionId = obligacion.id,
+                        fecha = fecha,
+                        descripcion = descripcion.ifBlank { null }
+                    ) {
+                        descripcion = ""
+                    }
+                },
+                enabled = !vm.loading
+            ) {
+                Text("Crear mantenimiento")
+            }
         }
 
         Spacer(
@@ -446,7 +449,8 @@ fun MantenimientosScreen(
                         )
                     }
 
-                    when (siguienteEstado(mantenimiento.estado)) {
+                    // Iniciar/Finalizar solo para gestion.
+                    if (vm.puedeGestionar) when (siguienteEstado(mantenimiento.estado)) {
                         "EN_PROCESO" -> OutlinedButton(
                             onClick = {
                                 vm.cambiarEstadoMantenimiento(
@@ -482,7 +486,7 @@ fun MantenimientosScreen(
         }
     }
 
-    aFinalizar?.let { mantenimiento ->
+    aFinalizar?.takeIf { vm.puedeGestionar }?.let { mantenimiento ->
         AlertDialog(
             onDismissRequest = {
                 aFinalizar = null
@@ -553,22 +557,25 @@ fun DocumentosScreen(
         onAction = onBack,
         scrollable = true
     ) {
-        Button(
-            onClick = {
-                if (!selectorAbierto) {
-                    selectorAbierto = true
-                    selector.launch(TIPOS_DOCUMENTO)
-                }
-            },
-            enabled = !vm.loading && !selectorAbierto
-        ) {
-            Text("Adjuntar archivo")
-        }
+        // Adjuntar solo para gestion (ADMIN/EXPLOTACION).
+        if (vm.puedeGestionar) {
+            Button(
+                onClick = {
+                    if (!selectorAbierto) {
+                        selectorAbierto = true
+                        selector.launch(TIPOS_DOCUMENTO)
+                    }
+                },
+                enabled = !vm.loading && !selectorAbierto
+            ) {
+                Text("Adjuntar archivo")
+            }
 
-        Text(
-            text = "PDF, JPEG o PNG · máximo 20 MB",
-            style = MaterialTheme.typography.bodySmall
-        )
+            Text(
+                text = "PDF, JPEG o PNG · máximo 20 MB",
+                style = MaterialTheme.typography.bodySmall
+            )
+        }
 
         if (vm.loading) {
             LinearProgressIndicator(
