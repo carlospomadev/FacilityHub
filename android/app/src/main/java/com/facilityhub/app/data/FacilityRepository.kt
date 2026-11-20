@@ -31,4 +31,32 @@ class FacilityRepository(private val api: FacilityApi, private val tokenStore: T
     // El cuerpo se envia en streaming desde el archivo; el backend espera la parte multipart "file".
     suspend fun subirDocumento(mantenimientoId: Long, nombre: String, mime: String, archivo: File) =
         api.subirDocumento(mantenimientoId, MultipartBody.Part.createFormData("file", nombre, archivo.asRequestBody(mime.toMediaType())))
+
+    // ---------- FH-006 / P6-C3 ----------
+    suspend fun intervenciones(mantenimientoId: Long) = api.intervenciones(mantenimientoId)
+    suspend fun registrarIntervencion(mantenimientoId: Long, datos: DatosIntervencionRequest) = api.registrarIntervencion(mantenimientoId, datos)
+    suspend fun intervencion(id: Long) = api.intervencion(id)
+    suspend fun actualizarIntervencion(id: Long, datos: DatosIntervencionRequest) = api.actualizarIntervencion(id, datos)
+    suspend fun adjuntarDocumento(id: Long, categoria: String, nombre: String, mime: String, archivo: File) =
+        api.adjuntarDocumento(id, MultipartBody.Part.createFormData("file", nombre, archivo.asRequestBody(mime.toMediaType())), categoria)
+    suspend fun enviarIntervencion(id: Long, version: Long) = api.enviarIntervencion(id, EnvioRequest(version))
+    suspend fun validarIntervencion(id: Long, request: ValidacionRequest) = api.validarIntervencion(id, request)
+    suspend fun pendientesValidacion() = api.pendientesValidacion()
+    suspend fun descargarDocumentoIntervencion(id: Long, documentoId: Long) = api.descargarDocumentoIntervencion(id, documentoId)
+    suspend fun descargarDocumento(documentoId: Long) = api.descargarDocumento(documentoId)
+    suspend fun proveedores() = api.proveedores()
+    suspend fun asignacion(mantenimientoId: Long) = api.asignacion(mantenimientoId)
+    suspend fun declaracionesPendientes() = api.declaracionesPendientes()
+    suspend fun revisarDeclaracion(id: Long, request: RevisionDeclaracionRequest) = api.revisarDeclaracion(id, request)
+    suspend fun solicitudesGestion() = api.solicitudesGestion()
+    suspend fun resolverSolicitud(id: Long, request: ResolverSolicitudRequest) = api.resolverSolicitud(id, request)
+    suspend fun obligacionesInquilino() = api.obligacionesInquilino()
+    suspend fun mantenimientosInquilino(obligacionId: Long) = api.mantenimientosInquilino(obligacionId)
+    suspend fun buscarProveedor(cif: String) = api.buscarProveedor(cif)
+    suspend fun declararProveedor(obligacionId: Long, proveedorId: Long) = api.declararProveedor(obligacionId, DeclararProveedorRequest(proveedorId))
+    suspend fun solicitarProveedor(request: SolicitudProveedorRequest) = api.solicitarProveedor(request)
+    suspend fun solicitudesInquilino() = api.solicitudesInquilino()
+    suspend fun fijarFechaPrevista(mantenimientoId: Long, fecha: String, version: Long) =
+        api.fijarFechaPrevista(mantenimientoId, FechaPrevistaRequest(fecha, version))
+    suspend fun asignarProveedorAceptado(mantenimientoId: Long) = api.asignarProveedorAceptado(mantenimientoId, AsignacionInquilinoRequest(null))
 }

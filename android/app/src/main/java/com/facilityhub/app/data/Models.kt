@@ -24,6 +24,9 @@ data class TrabajoProveedorDto(
     val responsable: String,
     val tecnicoAsignado: String?,
     val asignadoAt: String?,
-    val accionesPermitidas: List<String>?
+    val accionesPermitidas: List<String>?,
+    // FH-006 / P6-C3: intervencion mas reciente de su empresa y su estado de validacion.
+    val intervencionId: Long?,
+    val estadoValidacion: String?
 )
 data class DocumentoDto(val id: Long, val mantenimientoId: Long, val nombreOriginal: String, val tipoDocumento: String?, val fechaDocumento: String?, val fechaCaducidad: String?, val estadoRevision: String, val observaciones: String?, val fechaSubida: String?)

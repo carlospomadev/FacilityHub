@@ -1,13 +1,17 @@
 package com.facilityhub.app.data
 
 import okhttp3.MultipartBody
+import okhttp3.ResponseBody
 import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.Multipart
 import retrofit2.http.PATCH
 import retrofit2.http.POST
+import retrofit2.http.PUT
 import retrofit2.http.Part
 import retrofit2.http.Path
+import retrofit2.http.Query
+import retrofit2.http.Streaming
 
 interface FacilityApi {
     @POST("api/auth/login")
@@ -50,4 +54,83 @@ interface FacilityApi {
 
     @GET("api/proveedor/trabajos/{id}")
     suspend fun trabajo(@Path("id") mantenimientoId: Long): TrabajoProveedorDto
+
+    // ---------- FH-006 / P6-C3: intervenciones y validacion ----------
+
+    @GET("api/mantenimientos/{id}/intervenciones")
+    suspend fun intervenciones(@Path("id") mantenimientoId: Long): List<IntervencionDto>
+
+    @POST("api/mantenimientos/{id}/intervenciones")
+    suspend fun registrarIntervencion(@Path("id") mantenimientoId: Long, @Body datos: DatosIntervencionRequest): IntervencionDto
+
+    @GET("api/intervenciones/{id}")
+    suspend fun intervencion(@Path("id") id: Long): IntervencionDto
+
+    @PATCH("api/intervenciones/{id}")
+    suspend fun actualizarIntervencion(@Path("id") id: Long, @Body datos: DatosIntervencionRequest): IntervencionDto
+
+    @Multipart
+    @POST("api/intervenciones/{id}/documentos")
+    suspend fun adjuntarDocumento(@Path("id") id: Long, @Part file: MultipartBody.Part, @Query("categoria") categoria: String): IntervencionDto
+
+    @POST("api/intervenciones/{id}/envio")
+    suspend fun enviarIntervencion(@Path("id") id: Long, @Body request: EnvioRequest): IntervencionDto
+
+    @POST("api/intervenciones/{id}/validacion")
+    suspend fun validarIntervencion(@Path("id") id: Long, @Body request: ValidacionRequest): IntervencionDto
+
+    @GET("api/intervenciones/pendientes")
+    suspend fun pendientesValidacion(): List<IntervencionPendienteDto>
+
+    @Streaming
+    @GET("api/intervenciones/{id}/documentos/{documentoId}/archivo")
+    suspend fun descargarDocumentoIntervencion(@Path("id") id: Long, @Path("documentoId") documentoId: Long): ResponseBody
+
+    @Streaming
+    @GET("api/documentos/{id}/archivo")
+    suspend fun descargarDocumento(@Path("id") documentoId: Long): ResponseBody
+
+    @GET("api/proveedores")
+    suspend fun proveedores(): List<ProveedorDto>
+
+    @GET("api/mantenimientos/{id}/asignacion")
+    suspend fun asignacion(@Path("id") mantenimientoId: Long): AsignacionDto
+
+    @GET("api/declaraciones-proveedor/pendientes")
+    suspend fun declaracionesPendientes(): List<DeclaracionPendienteDto>
+
+    @PATCH("api/declaraciones-proveedor/{id}/revision")
+    suspend fun revisarDeclaracion(@Path("id") id: Long, @Body request: RevisionDeclaracionRequest): DeclaracionProveedorDto
+
+    @GET("api/solicitudes-proveedor")
+    suspend fun solicitudesGestion(): List<SolicitudProveedorDto>
+
+    @PATCH("api/solicitudes-proveedor/{id}")
+    suspend fun resolverSolicitud(@Path("id") id: Long, @Body request: ResolverSolicitudRequest): SolicitudProveedorDto
+
+    // ---------- FH-006 / P6-C3: area del INQUILINO ----------
+
+    @GET("api/inquilino/obligaciones")
+    suspend fun obligacionesInquilino(): List<ObligacionInquilinoDto>
+
+    @GET("api/inquilino/obligaciones/{id}/mantenimientos")
+    suspend fun mantenimientosInquilino(@Path("id") obligacionId: Long): List<MantenimientoInquilinoDetalleDto>
+
+    @GET("api/inquilino/proveedores")
+    suspend fun buscarProveedor(@Query("cif") cif: String): ProveedorBasicoDto
+
+    @PUT("api/inquilino/obligaciones/{id}/proveedor")
+    suspend fun declararProveedor(@Path("id") obligacionId: Long, @Body request: DeclararProveedorRequest): DeclaracionProveedorDto
+
+    @POST("api/inquilino/solicitudes-proveedor")
+    suspend fun solicitarProveedor(@Body request: SolicitudProveedorRequest): SolicitudProveedorDto
+
+    @GET("api/inquilino/solicitudes-proveedor")
+    suspend fun solicitudesInquilino(): List<SolicitudProveedorDto>
+
+    @PATCH("api/inquilino/mantenimientos/{id}/fecha-prevista")
+    suspend fun fijarFechaPrevista(@Path("id") mantenimientoId: Long, @Body request: FechaPrevistaRequest): MantenimientoInquilinoDetalleDto
+
+    @PUT("api/inquilino/mantenimientos/{id}/asignacion")
+    suspend fun asignarProveedorAceptado(@Path("id") mantenimientoId: Long, @Body request: AsignacionInquilinoRequest): AsignacionDto
 }

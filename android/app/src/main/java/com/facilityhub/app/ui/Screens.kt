@@ -112,7 +112,8 @@ fun LoginScreen(
 fun CentrosScreen(
     vm: FacilityViewModel,
     onCentro: (CentroDto) -> Unit,
-    onLogout: () -> Unit
+    onLogout: () -> Unit,
+    onMenu: (String) -> Unit = {}
 ) {
     LaunchedEffect(Unit) {
         if (vm.centros.isEmpty()) {
@@ -125,6 +126,20 @@ fun CentrosScreen(
         subtitle = "${vm.userName} · ${vm.role}",
         onAction = onLogout
     ) {
+        // FH-006 / P6-C3: accesos por rol (la navegacion no sustituye a los controles del backend).
+        if (vm.puedeGestionar) {
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                FilledTonalButton(onClick = { onMenu("validaciones") }) { Text("Validaciones") }
+                OutlinedButton(onClick = { onMenu("proveedores") }) { Text("Proveedores") }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                OutlinedButton(onClick = { onMenu("declaraciones") }) { Text("Declarados") }
+                OutlinedButton(onClick = { onMenu("solicitudes-gestion") }) { Text("Solicitudes") }
+            }
+        } else if (vm.esInquilino) {
+            FilledTonalButton(onClick = { onMenu("inquilino-obligaciones") }) { Text("Mis obligaciones y proveedores") }
+        }
+
         if (vm.loading) {
             LinearProgressIndicator(
                 modifier = Modifier.fillMaxWidth()
@@ -311,6 +326,7 @@ fun MantenimientosScreen(
     vm: FacilityViewModel,
     obligacion: ObligacionDto,
     onDocumentos: (MantenimientoDto) -> Unit,
+    onIntervenciones: (MantenimientoDto) -> Unit = {},
     onBack: () -> Unit
 ) {
     var fecha by remember {
@@ -319,10 +335,6 @@ fun MantenimientosScreen(
 
     var descripcion by remember {
         mutableStateOf("")
-    }
-
-    var aFinalizar by remember {
-        mutableStateOf<MantenimientoDto?>(null)
     }
 
     // La proxima fecha se toma de las obligaciones recargadas tras finalizar.
@@ -449,9 +461,10 @@ fun MantenimientosScreen(
                         )
                     }
 
-                    // Iniciar/Finalizar solo para gestion.
-                    if (vm.puedeGestionar) when (siguienteEstado(mantenimiento.estado)) {
-                        "EN_PROCESO" -> OutlinedButton(
+                    // Iniciar solo para gestion. FH-006 / P6-C3: "Finalizar" se sustituye por el circuito de
+                    // intervenciones (registro, envio y validacion); el cumplimiento lo declara la aprobacion.
+                    if (vm.puedeGestionar) {
+                        if (siguienteEstado(mantenimiento.estado) == "EN_PROCESO") OutlinedButton(
                             onClick = {
                                 vm.cambiarEstadoMantenimiento(
                                     mantenimiento = mantenimiento,
@@ -464,13 +477,8 @@ fun MantenimientosScreen(
                             Text("Iniciar")
                         }
 
-                        "FINALIZADO" -> Button(
-                            onClick = {
-                                aFinalizar = mantenimiento
-                            },
-                            enabled = !vm.loading
-                        ) {
-                            Text("Finalizar")
+                        TextButton(onClick = { onIntervenciones(mantenimiento) }) {
+                            Text("Intervenciones y asignación")
                         }
                     }
 
@@ -486,42 +494,6 @@ fun MantenimientosScreen(
         }
     }
 
-    aFinalizar?.takeIf { vm.puedeGestionar }?.let { mantenimiento ->
-        AlertDialog(
-            onDismissRequest = {
-                aFinalizar = null
-            },
-            title = {
-                Text("Finalizar mantenimiento")
-            },
-            text = {
-                Text("Se registrará la fecha de hoy como fecha de realización y se recalculará la próxima fecha.")
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        aFinalizar = null
-                        vm.cambiarEstadoMantenimiento(
-                            mantenimiento = mantenimiento,
-                            nuevoEstado = "FINALIZADO",
-                            localId = obligacion.localId
-                        )
-                    }
-                ) {
-                    Text("Confirmar")
-                }
-            },
-            dismissButton = {
-                TextButton(
-                    onClick = {
-                        aFinalizar = null
-                    }
-                ) {
-                    Text("Cancelar")
-                }
-            }
-        )
-    }
 }
 
 
@@ -712,6 +684,12 @@ fun TrabajosScreen(
                             ).joinToString(" · "),
                             style = MaterialTheme.typography.bodySmall
                         )
+
+                        // FH-006 / P6-C3: estado de la ultima intervencion de su empresa.
+                        Text(
+                            text = "Intervención: ${etiquetaValidacion(trabajo.estadoValidacion)}",
+                            style = MaterialTheme.typography.bodySmall
+                        )
                     }
                 }
             }
@@ -724,6 +702,8 @@ fun TrabajosScreen(
 fun TrabajoDetalleScreen(
     vm: FacilityViewModel,
     mantenimientoId: Long,
+    flujo: FlujoViewModel? = null,
+    onIntervencion: (Long) -> Unit = {},
     onBack: () -> Unit
 ) {
     LaunchedEffect(mantenimientoId) {
@@ -772,7 +752,10 @@ fun TrabajoDetalleScreen(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            if (trabajo.accionesPermitidas.isNullOrEmpty()) {
+            // FH-006 / P6-C3: intervenciones propias; registrar solo si el backend lo permite.
+            if (flujo != null) {
+                IntervencionesTrabajoSection(flujo, trabajo, onIntervencion)
+            } else if (trabajo.accionesPermitidas.isNullOrEmpty()) {
                 Text(
                     text = "Consulta: no hay acciones disponibles para este trabajo.",
                     style = MaterialTheme.typography.bodySmall
@@ -784,11 +767,12 @@ fun TrabajoDetalleScreen(
 
 
 @Composable
-private fun ScreenScaffold(
+internal fun ScreenScaffold(
     title: String,
     subtitle: String,
     onAction: () -> Unit,
     scrollable: Boolean = false,
+    actionLabel: String? = null,
     content: @Composable ColumnScope.() -> Unit
 ) {
     Scaffold(
@@ -799,6 +783,8 @@ private fun ScreenScaffold(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
+                        // FH-006 / P6-C3: la barra no se superpone a la barra de estado (pantalla edge-to-edge).
+                        .statusBarsPadding()
                         .padding(16.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -821,7 +807,7 @@ private fun ScreenScaffold(
                     ) {
                         Text(
                             // Pantallas raiz por rol (Centros, Mis trabajos): "Salir"; el resto: "Volver".
-                            if (title == "Centros" || title == TITULO_MIS_TRABAJOS) {
+                            actionLabel ?: if (title == "Centros" || title == TITULO_MIS_TRABAJOS) {
                                 "Salir"
                             } else {
                                 "Volver"
@@ -852,7 +838,7 @@ private fun ScreenScaffold(
 
 
 @Composable
-private fun SectionTitle(
+internal fun SectionTitle(
     text: String
 ) {
     Text(
