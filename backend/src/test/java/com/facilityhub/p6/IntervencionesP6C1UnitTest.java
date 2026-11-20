@@ -66,7 +66,8 @@ class IntervencionesP6C1UnitTest {
             new DocumentoAutorizacionService(usuarioRepository, mock(OcupacionLocalRepository.class), RELOJ);
         PoliticaAccesoService politica = new PoliticaAccesoService(autorizacion, intervencionRepository, asignacionRepository);
         servicio = new IntervencionService(intervencionRepository, validacionRepository, mantenimientoRepository,
-            asignacionRepository, documentoRepository, storage, autorizacion, politica, auditoria, RELOJ);
+            asignacionRepository, documentoRepository, storage, autorizacion, politica, auditoria,
+            mock(AlertaService.class), RELOJ); // P6-D1: alertas simuladas
 
         proveedor = proveedor(PROV_ID);
         Proveedor otra = proveedor(PROV_OTRA_ID);

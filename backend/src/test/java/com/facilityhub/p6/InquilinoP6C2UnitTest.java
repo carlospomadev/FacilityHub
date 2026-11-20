@@ -71,12 +71,13 @@ class InquilinoP6C2UnitTest {
         auditoria = mock(AuditoriaService.class);
         DocumentoAutorizacionService autorizacion = new DocumentoAutorizacionService(usuarioRepository, ocupacionRepository, RELOJ);
         PoliticaAccesoService politica = new PoliticaAccesoService(autorizacion, intervencionRepository, asignacionRepository);
+        // P6-D1: alertas simuladas (sus reglas se prueban en AlertasP6D1UnitTest).
         declaraciones = new DeclaracionProveedorService(declaracionRepository, obligacionRepository, ocupacionRepository,
-            proveedorRepository, autorizacion, auditoria, RELOJ);
+            proveedorRepository, autorizacion, auditoria, mock(AlertaService.class), RELOJ);
         solicitudes = new SolicitudProveedorService(solicitudRepository, proveedorRepository, ocupacionRepository,
             declaraciones, autorizacion, auditoria, RELOJ);
         asignaciones = new AsignacionService(mantenimientoRepository, asignacionRepository, proveedorRepository,
-            usuarioRepository, autorizacion, politica, declaraciones, auditoria, RELOJ);
+            usuarioRepository, autorizacion, politica, declaraciones, auditoria, mock(AlertaService.class), RELOJ);
         inquilinoService = new InquilinoService(ocupacionRepository, obligacionRepository, mantenimientoRepository,
             asignacionRepository, intervencionRepository, documentoRepository, proveedorRepository, declaraciones,
             asignaciones, autorizacion, auditoria, RELOJ);

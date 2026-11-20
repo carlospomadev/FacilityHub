@@ -31,6 +31,7 @@ public class IntervencionService {
     private final DocumentoAutorizacionService autorizacion;
     private final PoliticaAccesoService politica;
     private final AuditoriaService auditoria;
+    private final AlertaService alertas;
     private final Clock clock;
 
     public IntervencionService(IntervencionRepository intervencionRepository,
@@ -42,7 +43,9 @@ public class IntervencionService {
                                DocumentoAutorizacionService autorizacion,
                                PoliticaAccesoService politica,
                                AuditoriaService auditoria,
+                               AlertaService alertas,
                                Clock clock) {
+        this.alertas = alertas;
         this.intervencionRepository = intervencionRepository;
         this.validacionRepository = validacionRepository;
         this.mantenimientoRepository = mantenimientoRepository;
@@ -191,6 +194,7 @@ public class IntervencionService {
         auditoria.registrar(ENTIDAD, intervencion.getId(), "ENVIAR", usuario, AuditoriaService.detalle(
             "numeroEnvio", intervencion.getNumeroEnvio(), "resultado", resultado.name(),
             "ejecucionAnticipada", intervencion.isEjecucionAnticipada(), "origen", intervencion.getOrigen().name()));
+        alertas.evidenciasPresentadas(intervencion, usuario); // P6-D1: aviso a EXPLOTACION, en la misma transaccion
         return toDto(usuario, intervencion);
     }
 
@@ -244,6 +248,7 @@ public class IntervencionService {
             auditoria.registrar(ENTIDAD, intervencion.getId(), "APROBAR", usuario, AuditoriaService.detalle(
                 "numeroEnvio", intervencion.getNumeroEnvio(), "proximaFechaAnterior", anterior, "proximaFechaNueva", siguiente,
                 "regla", tipo.getReglaRecalculo().name(), "documentosCompartidos", compartir.size()));
+            alertas.aprobado(intervencion, usuario); // P6-D1: proveedor e inquilino correspondiente
         } else if (request.accion() == AccionValidacion.CERRAR_SIN_CUMPLIMIENTO) {
             if (intervencion.getResultado() != ResultadoIntervencion.NO_REALIZADO) {
                 throw new ConflictoException("Solo un intento NO_REALIZADO puede cerrarse sin cumplimiento");
@@ -280,6 +285,7 @@ public class IntervencionService {
                 request.comentario().trim(), usuario, ahora));
             auditoria.registrar(ENTIDAD, intervencion.getId(), "SOLICITAR_CORRECCION", usuario, AuditoriaService.detalle(
                 "numeroEnvio", intervencion.getNumeroEnvio()));
+            alertas.correccionSolicitada(intervencion, usuario); // P6-D1: aviso a la empresa proveedora
         }
         intervencionRepository.saveAndFlush(intervencion);
         return toDto(usuario, intervencion);

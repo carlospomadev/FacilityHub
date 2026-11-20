@@ -103,6 +103,11 @@ public class SecurityConfig {
                     .hasAnyRole("ADMIN", "EXPLOTACION", "PROVEEDOR")
                 .requestMatchers(HttpMethod.PATCH, "/api/intervenciones/*")
                     .hasAnyRole("ADMIN", "EXPLOTACION", "PROVEEDOR")
+                // FH-006 / P6-D1: alertas propias (el servicio filtra por el usuario de la sesion).
+                .requestMatchers(HttpMethod.GET, "/api/alertas", "/api/alertas/no-leidas")
+                    .hasAnyRole("ADMIN", "EXPLOTACION", "INQUILINO", "PROVEEDOR")
+                .requestMatchers(HttpMethod.PATCH, "/api/alertas/*/leida")
+                    .hasAnyRole("ADMIN", "EXPLOTACION", "INQUILINO", "PROVEEDOR")
                 // FH-006 / P6-C2: area del INQUILINO (ocupacion y responsabilidad se comprueban en los servicios).
                 .requestMatchers("/api/inquilino/**")
                     .hasRole("INQUILINO")

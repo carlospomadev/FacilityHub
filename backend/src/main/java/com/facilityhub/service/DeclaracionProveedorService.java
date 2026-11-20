@@ -36,12 +36,15 @@ public class DeclaracionProveedorService {
     private final ProveedorRepository proveedorRepository;
     private final DocumentoAutorizacionService autorizacion;
     private final AuditoriaService auditoria;
+    private final AlertaService alertas;
     private final Clock clock;
 
     public DeclaracionProveedorService(ObligacionProveedorRepository declaracionRepository,
                                        ObligacionMantenimientoRepository obligacionRepository,
                                        OcupacionLocalRepository ocupacionRepository, ProveedorRepository proveedorRepository,
-                                       DocumentoAutorizacionService autorizacion, AuditoriaService auditoria, Clock clock) {
+                                       DocumentoAutorizacionService autorizacion, AuditoriaService auditoria,
+                                       AlertaService alertas, Clock clock) {
+        this.alertas = alertas;
         this.declaracionRepository = declaracionRepository;
         this.obligacionRepository = obligacionRepository;
         this.ocupacionRepository = ocupacionRepository;
@@ -77,6 +80,7 @@ public class DeclaracionProveedorService {
         auditoria.registrar(ENTIDAD, nueva.getId(), "DECLARAR_PROVEEDOR", usuario, AuditoriaService.detalle(
             "obligacionId", obligacionId, "proveedorId", proveedor.getId(), "ocupacionId", acceso.ocupacion().getId(),
             "sustituye", activa.map(ObligacionProveedor::getId).orElse(null)));
+        alertas.proveedorDeclarado(nueva, usuario); // P6-D1: aviso a EXPLOTACION, en la misma transaccion
         return toDto(nueva);
     }
 
