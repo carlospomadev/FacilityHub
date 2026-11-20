@@ -57,7 +57,9 @@ public class MantenimientoService {
         if (obligacion.getLocal() == null || !autorizacion.puedeAccederLocal(usuario, obligacion.getLocal().getId())) {
             throw new RecursoNoDisponibleException();
         }
+        // FH-006 / P6-C2: solo los mantenimientos cubiertos por su ocupacion (sin historial de ocupantes anteriores).
         return mantenimientoRepository.findByObligacionIdOrderByFechaProgramadaDesc(obligacionId).stream()
+            .filter(m -> autorizacion.puedeLeerMantenimiento(usuario, m))
             .map(this::toInquilinoDto)
             .toList();
     }

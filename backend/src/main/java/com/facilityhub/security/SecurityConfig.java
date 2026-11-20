@@ -102,6 +102,18 @@ public class SecurityConfig {
                     .hasAnyRole("ADMIN", "EXPLOTACION", "PROVEEDOR")
                 .requestMatchers(HttpMethod.PATCH, "/api/intervenciones/*")
                     .hasAnyRole("ADMIN", "EXPLOTACION", "PROVEEDOR")
+                // FH-006 / P6-C2: area del INQUILINO (ocupacion y responsabilidad se comprueban en los servicios).
+                .requestMatchers("/api/inquilino/**")
+                    .hasRole("INQUILINO")
+                // Declaraciones de proveedor: revision por gestion. Solicitudes: consulta gestion, resolucion ADMIN.
+                .requestMatchers(HttpMethod.GET, "/api/declaraciones-proveedor/pendientes")
+                    .hasAnyRole("ADMIN", "EXPLOTACION")
+                .requestMatchers(HttpMethod.PATCH, "/api/declaraciones-proveedor/*/revision")
+                    .hasAnyRole("ADMIN", "EXPLOTACION")
+                .requestMatchers(HttpMethod.GET, "/api/solicitudes-proveedor")
+                    .hasAnyRole("ADMIN", "EXPLOTACION")
+                .requestMatchers(HttpMethod.PATCH, "/api/solicitudes-proveedor/*")
+                    .hasRole("ADMIN")
                 .requestMatchers(HttpMethod.GET, "/api/proveedores", "/api/proveedores/*")
                     .hasAnyRole("ADMIN", "EXPLOTACION")
                 .requestMatchers("/api/proveedores/**")

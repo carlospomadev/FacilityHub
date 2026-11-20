@@ -29,18 +29,23 @@ public class AsignacionService {
     private final UsuarioRepository usuarioRepository;
     private final DocumentoAutorizacionService autorizacion;
     private final PoliticaAccesoService politica;
+    private final DeclaracionProveedorService declaraciones;
+    private final AuditoriaService auditoria;
     private final Clock clock;
 
     public AsignacionService(MantenimientoRepository mantenimientoRepository,
                              AsignacionMantenimientoRepository asignacionRepository,
                              ProveedorRepository proveedorRepository, UsuarioRepository usuarioRepository,
-                             DocumentoAutorizacionService autorizacion, PoliticaAccesoService politica, Clock clock) {
+                             DocumentoAutorizacionService autorizacion, PoliticaAccesoService politica,
+                             DeclaracionProveedorService declaraciones, AuditoriaService auditoria, Clock clock) {
         this.mantenimientoRepository = mantenimientoRepository;
         this.asignacionRepository = asignacionRepository;
         this.proveedorRepository = proveedorRepository;
         this.usuarioRepository = usuarioRepository;
         this.autorizacion = autorizacion;
         this.politica = politica;
+        this.declaraciones = declaraciones;
+        this.auditoria = auditoria;
         this.clock = clock;
     }
 
@@ -67,22 +72,51 @@ public class AsignacionService {
         if (!proveedor.isActivo()) {
             throw new ConflictoException("El proveedor esta dado de baja");
         }
+        // FH-006 / P6-C2: en obligaciones INQUILINO solo el proveedor ACEPTADO de la ocupacion vigente.
+        if (mantenimiento.getObligacion().getResponsable() == com.facilityhub.domain.ResponsableObligacion.INQUILINO
+            && declaraciones.proveedorAceptadoVigente(mantenimiento.getObligacion())
+                .filter(d -> d.getProveedor().getId().equals(proveedor.getId())).isEmpty()) {
+            throw new ConflictoException("En obligaciones del inquilino solo se asigna su proveedor aceptado");
+        }
         Usuario tecnico = tecnicoValido(request.tecnicoUsuarioId(), proveedor);
+        return toDto(asignarProveedor(mantenimiento, proveedor, tecnico, usuario));
+    }
 
+    // FH-006 / P6-C2: asignacion hecha por el INQUILINO con su proveedor aceptado (las comprobaciones de acceso y de
+    // declaracion las hace InquilinoService).
+    @Transactional
+    public AsignacionDto asignarPorInquilino(Mantenimiento mantenimiento, Proveedor proveedor, Long tecnicoUsuarioId,
+                                             Usuario usuario) {
+        if (!mantenimiento.admiteAsignacion()) {
+            throw new ConflictoException("El mantenimiento no admite asignacion en estado " + mantenimiento.getEstado());
+        }
+        if (!proveedor.isActivo()) {
+            throw new ConflictoException("El proveedor esta dado de baja");
+        }
+        return toDto(asignarProveedor(mantenimiento, proveedor, tecnicoValido(tecnicoUsuarioId, proveedor), usuario));
+    }
+
+    // Nucleo comun: idempotente si no cambia nada; reasignar cierra la anterior. Auditado.
+    private AsignacionMantenimiento asignarProveedor(Mantenimiento mantenimiento, Proveedor proveedor, Usuario tecnico,
+                                                     Usuario usuario) {
+        Long mantenimientoId = mantenimiento.getId();
         Optional<AsignacionMantenimiento> actual = asignacionRepository.findByMantenimientoIdAndActivaTrue(mantenimientoId);
         if (actual.isPresent()) {
             AsignacionMantenimiento anterior = actual.get();
             boolean mismoTecnico = Objects.equals(idDe(anterior.getTecnico()), idDe(tecnico));
             if (anterior.getProveedor().getId().equals(proveedor.getId()) && mismoTecnico) {
-                return toDto(anterior); // idempotente
+                return anterior; // idempotente
             }
             anterior.finalizar(MotivoFinAsignacion.REASIGNADA, usuario, LocalDateTime.now(clock));
             // Se vuelca antes de insertar la nueva para respetar el indice unico de asignacion activa.
             asignacionRepository.saveAndFlush(anterior);
         }
-        AsignacionMantenimiento nueva = new AsignacionMantenimiento(mantenimiento, proveedor, tecnico, usuario,
-            LocalDateTime.now(clock));
-        return toDto(asignacionRepository.saveAndFlush(nueva));
+        AsignacionMantenimiento nueva = asignacionRepository.saveAndFlush(new AsignacionMantenimiento(mantenimiento,
+            proveedor, tecnico, usuario, LocalDateTime.now(clock)));
+        auditoria.registrar("MANTENIMIENTO", mantenimientoId, "ASIGNAR_PROVEEDOR", usuario, AuditoriaService.detalle(
+            "asignacionId", nueva.getId(), "proveedorId", proveedor.getId(),
+            "sustituye", actual.map(AsignacionMantenimiento::getId).orElse(null)));
+        return nueva;
     }
 
     @Transactional
