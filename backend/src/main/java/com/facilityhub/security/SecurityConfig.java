@@ -95,7 +95,8 @@ public class SecurityConfig {
                     .hasAnyRole("ADMIN", "EXPLOTACION")
                 .requestMatchers(HttpMethod.GET, "/api/intervenciones/pendientes")
                     .hasAnyRole("ADMIN", "EXPLOTACION")
-                .requestMatchers(HttpMethod.GET, "/api/mantenimientos/*/intervenciones", "/api/intervenciones/*")
+                .requestMatchers(HttpMethod.GET, "/api/mantenimientos/*/intervenciones", "/api/intervenciones/*",
+                    "/api/intervenciones/*/documentos/*/archivo")
                     .hasAnyRole("ADMIN", "EXPLOTACION", "PROVEEDOR")
                 .requestMatchers(HttpMethod.POST, "/api/mantenimientos/*/intervenciones", "/api/intervenciones/*/documentos",
                     "/api/intervenciones/*/envio")

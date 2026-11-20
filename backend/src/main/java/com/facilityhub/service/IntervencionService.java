@@ -287,6 +287,25 @@ public class IntervencionService {
 
     // ---------- Consultas ----------
 
+    // FH-006 / P6-C3: descarga de un documento de la intervencion. Gestion: cualquiera. PROVEEDOR: intervenciones de su
+    // empresa (tambien historicas) y solo documentos subidos por usuarios de su empresa. Lo demas: 404 uniforme.
+    @Transactional(readOnly = true)
+    public DocumentoService.DescargaDocumento descargar(Long intervencionId, Long documentoId, String email) {
+        Usuario usuario = autorizacion.usuarioActual(email);
+        Intervencion intervencion = intervencionLegible(usuario, intervencionId);
+        DocumentoMantenimiento documento = documentoRepository.findById(documentoId)
+            .filter(d -> d.getIntervencion() != null && d.getIntervencion().getId().equals(intervencion.getId()))
+            .orElseThrow(RecursoNoDisponibleException::new);
+        if (!autorizacion.esGestion(usuario)) {
+            Long empresa = autorizacion.proveedorConAcceso(usuario).orElseThrow(RecursoNoDisponibleException::new);
+            Usuario autor = documento.getSubidoPor();
+            if (autor == null || autor.getProveedor() == null || !empresa.equals(autor.getProveedor().getId())) {
+                throw new RecursoNoDisponibleException();
+            }
+        }
+        return new DocumentoService.DescargaDocumento(documento.getNombreOriginal(), storageService.cargar(documento.getRutaArchivo()));
+    }
+
     @Transactional(readOnly = true)
     public IntervencionDto obtener(Long intervencionId, String email) {
         Usuario usuario = autorizacion.usuarioActual(email);

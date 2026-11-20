@@ -412,6 +412,32 @@ class IntervencionesP6C1UnitTest {
         assertThat(mantenimiento.getFechaRealizacion()).isNull();
     }
 
+    // ---------- P6-C3: descarga de documentos de la intervencion ----------
+
+    @Test
+    void p6c3_01_descargaDelProveedorSoloDeDocumentosDeSuEmpresa() {
+        Intervencion i = spy(new Intervencion(mantenimiento, proveedor, tecnico, OrigenIntervencion.PROVEEDOR, tecnico, LocalDateTime.now(RELOJ)));
+        doReturn(9L).when(i).getId();
+        when(intervencionRepository.findById(9L)).thenReturn(Optional.of(i));
+        DocumentoMantenimiento propio = documento(91L, i, CategoriaDocumento.CERTIFICADO);
+        DocumentoMantenimiento deGestion = spy(DocumentoMantenimiento.deIntervencion(i, "gestion.pdf", "y", CategoriaDocumento.OTRO, explotacion));
+        doReturn(92L).when(deGestion).getId();
+        Intervencion otra = spy(new Intervencion(mantenimiento, proveedor, tecnico, OrigenIntervencion.PROVEEDOR, tecnico, LocalDateTime.now(RELOJ)));
+        doReturn(8L).when(otra).getId();
+        DocumentoMantenimiento deOtraIntervencion = documento(93L, otra, CategoriaDocumento.EVIDENCIA);
+        when(documentoRepository.findById(91L)).thenReturn(Optional.of(propio));
+        when(documentoRepository.findById(92L)).thenReturn(Optional.of(deGestion));
+        when(documentoRepository.findById(93L)).thenReturn(Optional.of(deOtraIntervencion));
+
+        assertThat(servicio.descargar(9L, 91L, TECNICO).nombre()).isEqualTo("sintetico.pdf");
+        assertThatThrownBy(() -> servicio.descargar(9L, 92L, TECNICO)).isInstanceOf(RecursoNoDisponibleException.class);
+        assertThatThrownBy(() -> servicio.descargar(9L, 93L, TECNICO)).isInstanceOf(RecursoNoDisponibleException.class);
+        assertThatThrownBy(() -> servicio.descargar(9L, 91L, TECNICO_OTRA)).isInstanceOf(RecursoNoDisponibleException.class);
+        assertThatThrownBy(() -> servicio.descargar(9L, 91L, INQUILINO)).isInstanceOf(AccessDeniedException.class);
+        assertThat(servicio.descargar(9L, 92L, EXPLOTACION).nombre()).isEqualTo("gestion.pdf");
+        verify(storage, times(2)).cargar(any());
+    }
+
     // ---------- Utilidades ----------
 
     private DatosIntervencionRequest datos(LocalDate fecha, ResultadoIntervencion r) {

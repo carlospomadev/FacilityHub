@@ -292,6 +292,37 @@ class IntervencionesP6C1P6IT extends P4IntegracionBase {
         mvc.perform(json(post("/api/mantenimientos/{id}/intervenciones", cumplido), tecnico, "{}")).andExpect(status().isConflict());
     }
 
+    @Test
+    void p6c3_it_01_descargaDeDocumentosDeIntervencionPorRol() throws Exception {
+        Long proveedorA = insertarProveedor();
+        Long proveedorB = insertarProveedor();
+        Long tecnicoA = insertarTecnico(proveedorA);
+        String emailA = emailTecnico(tecnicoA);
+        String emailB = emailTecnico(insertarTecnico(proveedorB));
+        Long mantenimiento = nuevoMantenimiento(obligacionNhoodPropia());
+        insertarAsignacion(mantenimiento, proveedorA);
+        sincronizar();
+        Long id = idDe(mvc.perform(json(post("/api/mantenimientos/{id}/intervenciones", mantenimiento), emailA, "{}"))
+            .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString());
+        // Archivo sintetico en el almacenamiento temporal de la ejecucion; documento subido por el tecnico de A.
+        String ruta = crearArchivoSintetico("P4-descarga-" + id + ".pdf", "%PDF-1.4 sintetico".getBytes()).toString();
+        Long documento = jdbc.queryForObject("""
+            INSERT INTO facilityhub.documentos_mantenimiento (mantenimiento_id, nombre_original, ruta_archivo, estado_revision,
+              visibilidad, intervencion_id, categoria, subido_por_usuario_id)
+            VALUES (?, 'P4-descarga.pdf', ?, 'PENDIENTE', 'INTERNO', ?, 'EVIDENCIA', ?) RETURNING id""",
+            Long.class, mantenimiento, ruta, id, tecnicoA);
+        sincronizar();
+        String url = "/api/intervenciones/{id}/documentos/{doc}/archivo";
+        mvc.perform(get(url, id, documento).header(HttpHeaders.AUTHORIZATION, bearer(emailA))).andExpect(status().isOk());
+        mvc.perform(get(url, id, documento).header(HttpHeaders.AUTHORIZATION, bearer(EMAIL_EXPLOTACION))).andExpect(status().isOk());
+        mvc.perform(get(url, id, documento).header(HttpHeaders.AUTHORIZATION, bearer(emailB))).andExpect(status().isNotFound());
+        mvc.perform(get(url, id, 99_999_999L).header(HttpHeaders.AUTHORIZATION, bearer(emailA))).andExpect(status().isNotFound());
+        mvc.perform(get(url, id, documento).header(HttpHeaders.AUTHORIZATION, bearer(EMAIL_INQUILINO))).andExpect(status().isForbidden());
+        // La ruta general P5 sigue cerrada al proveedor.
+        mvc.perform(get("/api/documentos/{doc}/archivo", documento).header(HttpHeaders.AUTHORIZATION, bearer(emailA)))
+            .andExpect(status().isForbidden());
+    }
+
     // ---- Utilidades (datos sinteticos, revertidos al final de cada prueba) ----
 
     private MockHttpServletRequestBuilder json(MockHttpServletRequestBuilder b, String email, String cuerpo) {

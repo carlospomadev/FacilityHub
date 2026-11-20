@@ -2,9 +2,13 @@ package com.facilityhub.api;
 
 import com.facilityhub.api.dto.intervencion.*;
 import com.facilityhub.domain.CategoriaDocumento;
+import com.facilityhub.service.DocumentoService;
 import com.facilityhub.service.IntervencionService;
 import jakarta.validation.Valid;
+import org.springframework.core.io.Resource;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -65,6 +69,16 @@ public class IntervencionController {
     @PostMapping("/api/intervenciones/{id}/validacion")
     public IntervencionDto validar(@PathVariable Long id, @Valid @RequestBody ValidacionRequest request, Principal principal) {
         return intervencionService.validar(id, request, email(principal));
+    }
+
+    // FH-006 / P6-C3: descarga de documentos de una intervencion (gestion: todos; PROVEEDOR: los que subio su empresa).
+    @GetMapping("/api/intervenciones/{id}/documentos/{documentoId}/archivo")
+    public ResponseEntity<Resource> descargar(@PathVariable Long id, @PathVariable Long documentoId, Principal principal) {
+        DocumentoService.DescargaDocumento descarga = intervencionService.descargar(id, documentoId, email(principal));
+        return ResponseEntity.ok()
+            .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + descarga.nombre().replace("\"", "") + "\"")
+            .contentType(MediaType.APPLICATION_OCTET_STREAM)
+            .body(descarga.resource());
     }
 
     private static String email(Principal principal) {
