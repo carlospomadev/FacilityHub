@@ -31,13 +31,16 @@ public class AsignacionService {
     private final PoliticaAccesoService politica;
     private final DeclaracionProveedorService declaraciones;
     private final AuditoriaService auditoria;
+    private final AlertaService alertas;
     private final Clock clock;
 
     public AsignacionService(MantenimientoRepository mantenimientoRepository,
                              AsignacionMantenimientoRepository asignacionRepository,
                              ProveedorRepository proveedorRepository, UsuarioRepository usuarioRepository,
                              DocumentoAutorizacionService autorizacion, PoliticaAccesoService politica,
-                             DeclaracionProveedorService declaraciones, AuditoriaService auditoria, Clock clock) {
+                             DeclaracionProveedorService declaraciones, AuditoriaService auditoria, AlertaService alertas,
+                             Clock clock) {
+        this.alertas = alertas;
         this.mantenimientoRepository = mantenimientoRepository;
         this.asignacionRepository = asignacionRepository;
         this.proveedorRepository = proveedorRepository;
@@ -116,6 +119,7 @@ public class AsignacionService {
         auditoria.registrar("MANTENIMIENTO", mantenimientoId, "ASIGNAR_PROVEEDOR", usuario, AuditoriaService.detalle(
             "asignacionId", nueva.getId(), "proveedorId", proveedor.getId(),
             "sustituye", actual.map(AsignacionMantenimiento::getId).orElse(null)));
+        alertas.asignacion(nueva, usuario); // P6-D1: aviso a los tecnicos de la empresa, en la misma transaccion
         return nueva;
     }
 
