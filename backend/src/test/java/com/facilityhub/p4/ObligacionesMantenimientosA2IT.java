@@ -212,7 +212,10 @@ class ObligacionesMantenimientosA2IT extends P4IntegracionBase {
     }
 
     @Test
-    void a2c_13_gestionConservaCreacionTransicionYProximaFecha() throws Exception {
+    // FH-006 / P6-C1 (cambio intencionado): la gestion sigue creando mantenimientos, pero el endpoint P5 de estado ya no
+    // finaliza ni recalcula la proxima fecha (409): FINALIZADO llega presentando una intervencion y el recalculo solo
+    // al aprobarla. Asi no se elude la validacion documental.
+    void a2c_13_gestionCreaPeroElEndpointP5NoFinalizaNiRecalcula() throws Exception {
         Long obligacion = idObligacionDe(LOCAL_PROPIO);
         int antes = contarMantenimientos();
         mvc.perform(crear(obligacion).header(HttpHeaders.AUTHORIZATION, bearer(EMAIL_EXPLOTACION)))
@@ -223,23 +226,26 @@ class ObligacionesMantenimientosA2IT extends P4IntegracionBase {
         assertThat(contarMantenimientos()).isEqualTo(antes + 1);
 
         Long mantenimiento = insertarMantenimiento(obligacion, null);
-        Integer periodicidad = jdbc.queryForObject("""
-            SELECT t.periodicidad_meses FROM facilityhub.obligaciones_mantenimiento o
-            JOIN facilityhub.tipos_mantenimiento t ON t.id = o.tipo_mantenimiento_id WHERE o.id = ?""", Integer.class, obligacion);
+        LocalDate proximaAntes = jdbc.queryForObject(
+            "SELECT proxima_fecha FROM facilityhub.obligaciones_mantenimiento WHERE id = ?", LocalDate.class, obligacion);
         LocalDate realizacion = HOY.minusDays(2);
         mvc.perform(cambiarEstado(mantenimiento, "FINALIZADO", realizacion).header(HttpHeaders.AUTHORIZATION, bearer(EMAIL_ADMIN)))
-            .andExpect(status().isOk())
-            .andExpect(jsonPath("$.estado").value("FINALIZADO"))
-            .andExpect(jsonPath("$.observaciones").value("P4- cierre sintetico"));
+            .andExpect(status().isConflict());
         sincronizar();
         LocalDate proxima = jdbc.queryForObject(
             "SELECT proxima_fecha FROM facilityhub.obligaciones_mantenimiento WHERE id = ?", LocalDate.class, obligacion);
-        assertThat(proxima).isEqualTo(realizacion.plusMonths(periodicidad));
+        assertThat(proxima).isEqualTo(proximaAntes);
+        assertThat(estadoEnBd(mantenimiento)).isEqualTo("PROGRAMADO");
 
-        // FINALIZADO sin fecha sigue rechazandose (400) y no cambia nada.
+        // Las transiciones no finales siguen disponibles para gestion.
+        mvc.perform(cambiarEstado(mantenimiento, "EN_PROCESO", null).header(HttpHeaders.AUTHORIZATION, bearer(EMAIL_ADMIN)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.estado").value("EN_PROCESO"));
+
+        // FINALIZADO sin fecha tambien se rechaza (409) y no cambia nada.
         Long otro = insertarMantenimiento(obligacion, null);
         mvc.perform(cambiarEstado(otro, "FINALIZADO", null).header(HttpHeaders.AUTHORIZATION, bearer(EMAIL_ADMIN)))
-            .andExpect(status().isBadRequest());
+            .andExpect(status().isConflict());
         sincronizar();
         assertThat(estadoEnBd(otro)).isEqualTo("PROGRAMADO");
     }

@@ -74,14 +74,15 @@ class ProveedoresAsignacionesP6BUnitTest {
         when(passwordEncoder.encode(any())).thenReturn("$2a$10$hashsintetico");
 
         autorizacion = new DocumentoAutorizacionService(usuarioRepository, ocupacionRepository, RELOJ);
-        PoliticaAccesoService politica = new PoliticaAccesoService(autorizacion);
+        IntervencionRepository intervencionRepository = mock(IntervencionRepository.class);
+        PoliticaAccesoService politica = new PoliticaAccesoService(autorizacion, intervencionRepository, asignacionRepository);
         proveedorService = new ProveedorService(proveedorRepository, usuarioRepository, rolRepository,
             asignacionRepository, autorizacion, passwordEncoder, RELOJ);
         asignacionService = new AsignacionService(mantenimientoRepository, asignacionRepository, proveedorRepository,
             usuarioRepository, autorizacion, politica, RELOJ);
-        trabajoService = new TrabajoProveedorService(asignacionRepository, autorizacion, politica);
+        trabajoService = new TrabajoProveedorService(asignacionRepository, autorizacion, politica, intervencionRepository);
         obligacionService = new ObligacionService(localRepository, obligacionRepository, ocupacionRepository, autorizacion);
-        mantenimientoService = new MantenimientoService(mantenimientoRepository, obligacionRepository, autorizacion);
+        mantenimientoService = new MantenimientoService(mantenimientoRepository, obligacionRepository, autorizacion, intervencionRepository);
 
         proveedor = proveedor(PROVEEDOR_ID, true);
         proveedorOtro = proveedor(PROVEEDOR_OTRO_ID, true);
