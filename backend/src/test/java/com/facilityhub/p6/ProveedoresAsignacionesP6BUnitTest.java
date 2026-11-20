@@ -78,8 +78,11 @@ class ProveedoresAsignacionesP6BUnitTest {
         PoliticaAccesoService politica = new PoliticaAccesoService(autorizacion, intervencionRepository, asignacionRepository);
         proveedorService = new ProveedorService(proveedorRepository, usuarioRepository, rolRepository,
             asignacionRepository, autorizacion, passwordEncoder, RELOJ);
+        // P6-C2: el servicio de asignacion recibe ademas las declaraciones de proveedor del inquilino y la auditoria.
+        DeclaracionProveedorService declaraciones = new DeclaracionProveedorService(mock(ObligacionProveedorRepository.class),
+            obligacionRepository, ocupacionRepository, proveedorRepository, autorizacion, mock(AuditoriaService.class), RELOJ);
         asignacionService = new AsignacionService(mantenimientoRepository, asignacionRepository, proveedorRepository,
-            usuarioRepository, autorizacion, politica, RELOJ);
+            usuarioRepository, autorizacion, politica, declaraciones, mock(AuditoriaService.class), RELOJ);
         trabajoService = new TrabajoProveedorService(asignacionRepository, autorizacion, politica, intervencionRepository);
         obligacionService = new ObligacionService(localRepository, obligacionRepository, ocupacionRepository, autorizacion);
         mantenimientoService = new MantenimientoService(mantenimientoRepository, obligacionRepository, autorizacion, intervencionRepository);
@@ -196,12 +199,15 @@ class ProveedoresAsignacionesP6BUnitTest {
     }
 
     @Test
-    void p6b_07_explotacionNoAsignaEnObligacionDelInquilinoPeroAdminSi() {
+    // P6-C2 (cambio intencionado): en obligaciones INQUILINO, ADMIN ya no asigna cualquier proveedor; solo el ACEPTADO
+    // de la ocupacion vigente (cubierto en P6-C2). Sin declaracion aceptada responde 409.
+    void p6b_07_explotacionNoAsignaEnObligacionDelInquilinoYAdminSoloElAceptado() {
         mantenimientoEnRepo(EstadoMantenimiento.PROGRAMADO, ResponsableObligacion.INQUILINO);
         assertThatThrownBy(() -> asignacionService.asignar(MANTENIMIENTO_ID, new AsignacionRequest(PROVEEDOR_ID, null), EXPLOTACION))
             .isInstanceOf(AccessDeniedException.class);
+        assertThatThrownBy(() -> asignacionService.asignar(MANTENIMIENTO_ID, new AsignacionRequest(PROVEEDOR_ID, null), ADMIN))
+            .isInstanceOf(ConflictoException.class);
         verify(asignacionRepository, never()).saveAndFlush(any());
-        assertThat(asignacionService.asignar(MANTENIMIENTO_ID, new AsignacionRequest(PROVEEDOR_ID, null), ADMIN).activa()).isTrue();
     }
 
     @Test

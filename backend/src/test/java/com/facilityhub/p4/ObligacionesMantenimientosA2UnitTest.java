@@ -85,6 +85,11 @@ class ObligacionesMantenimientosA2UnitTest {
         // existeOcupacionVigente ya incluye ocupacion activa y vigente, local activo y centro activo (B1).
         when(ocupacionRepository.existeOcupacionVigente(LOCAL_PROPIO, INQUILINO_ID, HOY)).thenReturn(true);
         when(ocupacionRepository.existeOcupacionVigente(LOCAL_AJENO, INQUILINO_ID, HOY)).thenReturn(false);
+        // P6-C2: ocupacion vigente concreta, iniciada antes de los mantenimientos sinteticos (historial protegido).
+        com.facilityhub.domain.OcupacionLocal ocupacion = mock(com.facilityhub.domain.OcupacionLocal.class);
+        when(ocupacion.getId()).thenReturn(6001L);
+        when(ocupacion.getFechaInicio()).thenReturn(LocalDate.of(2000, 1, 1));
+        when(ocupacionRepository.ocupacionVigente(LOCAL_PROPIO, INQUILINO_ID, HOY)).thenReturn(Optional.of(ocupacion));
         when(localRepository.existsById(LOCAL_PROPIO)).thenReturn(true);
         when(localRepository.existsById(LOCAL_AJENO)).thenReturn(true);
 
@@ -340,6 +345,10 @@ class ObligacionesMantenimientosA2UnitTest {
     private static Mantenimiento mantenimiento(Long obligacionId, String observaciones) {
         ObligacionMantenimiento obligacion = mock(ObligacionMantenimiento.class);
         when(obligacion.getId()).thenReturn(obligacionId);
+        // P6-C2: el filtro historico por mantenimiento necesita el local de la obligacion.
+        com.facilityhub.domain.LocalComercial local = mock(com.facilityhub.domain.LocalComercial.class);
+        when(local.getId()).thenReturn(LOCAL_PROPIO);
+        when(obligacion.getLocal()).thenReturn(local);
         Mantenimiento mantenimiento = new Mantenimiento(obligacion, HOY, "Descripcion sintetica");
         mantenimiento.cambiarEstado(EstadoMantenimiento.PENDIENTE, null, observaciones);
         return mantenimiento;
