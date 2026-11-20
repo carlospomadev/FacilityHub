@@ -113,7 +113,8 @@ fun CentrosScreen(
     vm: FacilityViewModel,
     onCentro: (CentroDto) -> Unit,
     onLogout: () -> Unit,
-    onMenu: (String) -> Unit = {}
+    onMenu: (String) -> Unit = {},
+    accionAlertas: (@Composable () -> Unit)? = null
 ) {
     LaunchedEffect(Unit) {
         if (vm.centros.isEmpty()) {
@@ -124,7 +125,8 @@ fun CentrosScreen(
     ScreenScaffold(
         title = "Centros",
         subtitle = "${vm.userName} · ${vm.role}",
-        onAction = onLogout
+        onAction = onLogout,
+        accionExtra = accionAlertas
     ) {
         // FH-006 / P6-C3: accesos por rol (la navegacion no sustituye a los controles del backend).
         if (vm.puedeGestionar) {
@@ -624,7 +626,8 @@ private const val TITULO_MIS_TRABAJOS = "Mis trabajos"
 fun TrabajosScreen(
     vm: FacilityViewModel,
     onTrabajo: (TrabajoProveedorDto) -> Unit,
-    onLogout: () -> Unit
+    onLogout: () -> Unit,
+    accionAlertas: (@Composable () -> Unit)? = null
 ) {
     LaunchedEffect(Unit) {
         vm.cargarTrabajos()
@@ -633,7 +636,8 @@ fun TrabajosScreen(
     ScreenScaffold(
         title = TITULO_MIS_TRABAJOS,
         subtitle = "${vm.userName} · ${vm.role}",
-        onAction = onLogout
+        onAction = onLogout,
+        accionExtra = accionAlertas
     ) {
         if (vm.loading) {
             LinearProgressIndicator(
@@ -773,6 +777,7 @@ internal fun ScreenScaffold(
     onAction: () -> Unit,
     scrollable: Boolean = false,
     actionLabel: String? = null,
+    accionExtra: (@Composable () -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit
 ) {
     Scaffold(
@@ -801,6 +806,9 @@ internal fun ScreenScaffold(
                             style = MaterialTheme.typography.bodySmall
                         )
                     }
+
+                    // FH-006 / P6-D1: acceso a «Mis notificaciones» en las pantallas raiz.
+                    accionExtra?.invoke()
 
                     TextButton(
                         onClick = onAction

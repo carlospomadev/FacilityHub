@@ -112,6 +112,17 @@ interface FacilityApi {
     @PATCH("api/solicitudes-proveedor/{id}")
     suspend fun resolverSolicitud(@Path("id") id: Long, @Body request: ResolverSolicitudRequest): SolicitudProveedorDto
 
+    // ---------- FH-006 / P6-D1: alertas propias ----------
+
+    @GET("api/alertas")
+    suspend fun alertas(@Query("soloNoLeidas") soloNoLeidas: Boolean): List<AlertaDto>
+
+    @GET("api/alertas/no-leidas")
+    suspend fun alertasNoLeidas(): NoLeidasDto
+
+    @PATCH("api/alertas/{id}/leida")
+    suspend fun marcarAlertaLeida(@Path("id") id: Long): AlertaDto
+
     // ---------- FH-006 / P6-C3: area del INQUILINO ----------
 
     @GET("api/inquilino/obligaciones")
