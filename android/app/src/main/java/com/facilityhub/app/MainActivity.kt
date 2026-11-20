@@ -69,10 +69,19 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun FacilityHubApp(
-    vm: FacilityViewModel = viewModel()
+    vm: FacilityViewModel = viewModel(),
+    flujo: FlujoViewModel = viewModel()
 ) {
 
     val nav = rememberNavController()
+
+    val salir: () -> Unit = {
+        vm.logout()
+        flujo.limpiarSesion()
+        nav.navigate("login") {
+            popUpTo(0)
+        }
+    }
 
     // FH-006 / P6-B: pantalla inicial por rol (PROVEEDOR -> "trabajos"; el resto -> "centros").
     val start =
@@ -110,15 +119,89 @@ fun FacilityHubApp(
                     nav.navigate("trabajo/${trabajo.mantenimientoId}")
                 },
 
-                onLogout = {
-
-                    vm.logout()
-
-                    nav.navigate("login") {
-                        popUpTo(0)
-                    }
-                }
+                onLogout = salir
             )
+        }
+
+
+        // FH-006 / P6-C3: rol ausente o desconocido -> sin acceso (denegacion por defecto).
+        composable("sin-permisos") {
+            SinPermisosScreen(onLogout = salir)
+        }
+
+
+        composable(
+            route = "intervencion/{id}",
+            arguments = listOf(navArgument("id") { type = NavType.LongType })
+        ) { entry ->
+            IntervencionScreen(flujo = flujo, intervencionId = entry.arguments!!.getLong("id")) {
+                nav.popBackStack()
+            }
+        }
+
+
+        composable(
+            route = "mant-gestion/{id}/{titulo}",
+            arguments = listOf(
+                navArgument("id") { type = NavType.LongType },
+                navArgument("titulo") { type = NavType.StringType }
+            )
+        ) { entry ->
+            MantenimientoGestionScreen(
+                flujo = flujo,
+                mantenimientoId = entry.arguments!!.getLong("id"),
+                titulo = dec(entry.arguments!!.getString("titulo")!!),
+                onIntervencion = { id -> nav.navigate("intervencion/$id") }
+            ) {
+                nav.popBackStack()
+            }
+        }
+
+
+        composable("validaciones") {
+            BandejaValidacionScreen(flujo, onIntervencion = { id -> nav.navigate("intervencion/$id") }) { nav.popBackStack() }
+        }
+
+        composable("proveedores") {
+            ProveedoresScreen(flujo) { nav.popBackStack() }
+        }
+
+        composable("declaraciones") {
+            DeclaracionesScreen(flujo) { nav.popBackStack() }
+        }
+
+        composable("solicitudes-gestion") {
+            SolicitudesGestionScreen(flujo, esAdmin = vm.esAdmin) { nav.popBackStack() }
+        }
+
+        composable("inquilino-obligaciones") {
+            ObligacionesInquilinoScreen(
+                flujo = flujo,
+                onObligacion = { o -> nav.navigate("inquilino-mant/${o.id}/${enc(o.tipoMantenimiento)}") },
+                onSolicitudes = { nav.navigate("inquilino-solicitudes") }
+            ) {
+                nav.popBackStack()
+            }
+        }
+
+        composable(
+            route = "inquilino-mant/{id}/{titulo}",
+            arguments = listOf(
+                navArgument("id") { type = NavType.LongType },
+                navArgument("titulo") { type = NavType.StringType }
+            )
+        ) { entry ->
+            MantenimientosInquilinoScreen(
+                flujo = flujo,
+                obligacionId = entry.arguments!!.getLong("id"),
+                titulo = dec(entry.arguments!!.getString("titulo")!!)
+            ) {
+                nav.popBackStack()
+            }
+        }
+
+        composable("inquilino-solicitudes") {
+            SolicitudesInquilinoScreen(flujo) { nav.popBackStack() }
         }
 
 
@@ -134,7 +217,9 @@ fun FacilityHubApp(
 
             TrabajoDetalleScreen(
                 vm = vm,
-                mantenimientoId = entry.arguments!!.getLong("mantenimientoId")
+                mantenimientoId = entry.arguments!!.getLong("mantenimientoId"),
+                flujo = flujo,
+                onIntervencion = { id -> nav.navigate("intervencion/$id") }
             ) {
                 nav.popBackStack()
             }
@@ -153,14 +238,9 @@ fun FacilityHubApp(
                     )
                 },
 
-                onLogout = {
+                onLogout = salir,
 
-                    vm.logout()
-
-                    nav.navigate("login") {
-                        popUpTo(0)
-                    }
-                }
+                onMenu = { ruta -> nav.navigate(ruta) }
             )
         }
 
@@ -326,6 +406,13 @@ fun FacilityHubApp(
 
                     nav.navigate(
                         "documentos/${mantenimiento.id}/" +
+                                enc(mantenimiento.descripcion ?: mantenimiento.fechaProgramada)
+                    )
+                },
+
+                onIntervenciones = { mantenimiento ->
+                    nav.navigate(
+                        "mant-gestion/${mantenimiento.id}/" +
                                 enc(mantenimiento.descripcion ?: mantenimiento.fechaProgramada)
                     )
                 }

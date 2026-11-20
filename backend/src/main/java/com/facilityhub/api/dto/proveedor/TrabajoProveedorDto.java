@@ -18,5 +18,8 @@ public record TrabajoProveedorDto(
     String responsable,
     String tecnicoAsignado,
     LocalDateTime asignadoAt,
-    List<String> accionesPermitidas
+    List<String> accionesPermitidas,
+    // FH-006 / P6-C1: intervencion mas reciente de su empresa en este trabajo (si existe) y su estado de validacion.
+    Long intervencionId,
+    String estadoValidacion
 ) {}

@@ -40,6 +40,9 @@ class DocumentoAutorizacionServiceTest {
         servicio = new DocumentoAutorizacionService(usuarioRepository, ocupacionRepository, RELOJ);
         when(ocupacionRepository.existeOcupacionVigente(LOCAL_PROPIO, INQUILINO_ID, HOY)).thenReturn(true);
         when(ocupacionRepository.existeOcupacionVigente(LOCAL_AJENO, INQUILINO_ID, HOY)).thenReturn(false);
+        // P6-C2: la ocupacion vigente concreta (cubre el mantenimiento por fecha del hecho).
+        var ocupacion = ocupacionVigente(6001L);
+        when(ocupacionRepository.ocupacionVigente(LOCAL_PROPIO, INQUILINO_ID, HOY)).thenReturn(Optional.of(ocupacion));
     }
 
     @Test

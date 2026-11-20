@@ -58,7 +58,18 @@ final class DocumentosFixtures {
         Mantenimiento mantenimiento = mock(Mantenimiento.class);
         when(mantenimiento.getId()).thenReturn(mantenimientoId);
         when(mantenimiento.getObligacion()).thenReturn(obligacion);
+        // P6-C2: hecho dentro de la ocupacion vigente sintetica (sin ocupacion vinculada).
+        when(mantenimiento.fechaDelHecho()).thenReturn(HOY);
         return mantenimiento;
+    }
+
+    // P6-C2: ocupacion vigente sintetica del inquilino en un local (iniciada antes de HOY, sin fin).
+    static com.facilityhub.domain.OcupacionLocal ocupacionVigente(Long ocupacionId) {
+        com.facilityhub.domain.OcupacionLocal ocupacion = mock(com.facilityhub.domain.OcupacionLocal.class);
+        when(ocupacion.getId()).thenReturn(ocupacionId);
+        when(ocupacion.getFechaInicio()).thenReturn(HOY.minusYears(1));
+        when(ocupacion.isActivo()).thenReturn(true);
+        return ocupacion;
     }
 
     static DocumentoMantenimiento documento(Mantenimiento mantenimiento, EstadoRevisionDocumento estado,

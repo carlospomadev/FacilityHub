@@ -32,9 +32,16 @@ class FacilityViewModel(application: Application) : AndroidViewModel(application
 
     // FH-006 / P6-B: el PROVEEDOR solo accede a sus trabajos asignados; nunca a centros ni locales.
     val esProveedor: Boolean get() = role == ROL_PROVEEDOR
+    val esInquilino: Boolean get() = role == ROL_INQUILINO
+    val esAdmin: Boolean get() = role == "ADMIN"
 
-    // Pantalla inicial segun el rol (la navegacion por rol no sustituye a los controles del backend).
-    val rutaInicio: String get() = if (esProveedor) "trabajos" else "centros"
+    // Pantalla inicial segun el rol. FH-006 / P6-C3: denegacion por defecto; un rol ausente o desconocido no entra en
+    // ninguna pantalla de datos (la navegacion por rol no sustituye a los controles del backend).
+    val rutaInicio: String get() = when {
+        esProveedor -> "trabajos"
+        puedeGestionar || esInquilino -> "centros"
+        else -> "sin-permisos"
+    }
 
     var centros by mutableStateOf<List<CentroDto>>(emptyList()); private set
     var locales by mutableStateOf<List<LocalDto>>(emptyList()); private set
@@ -53,7 +60,7 @@ class FacilityViewModel(application: Application) : AndroidViewModel(application
                 loggedIn = true; userName = result.nombre; role = result.rol
                 if (esProveedor) {
                     trabajos = repository.trabajos()
-                } else {
+                } else if (puedeGestionar || esInquilino) {
                     centros = repository.centros()
                 }
                 onSuccess()
@@ -134,9 +141,26 @@ class FacilityViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
-    // Valida tipo y tamano y copia el contenido a un temporal con limite de bytes, sin cargarlo en memoria.
-    private fun prepararDocumento(uri: Uri): DocumentoLocal {
-        val app = getApplication<Application>()
+    private fun prepararDocumento(uri: Uri): DocumentoLocal = prepararDocumentoLocal(getApplication(), uri)
+
+    fun logout() {
+        tokenStore.clear(); loggedIn = false; userName = ""; role = ""
+        centros = emptyList(); locales = emptyList(); obligaciones = emptyList(); mantenimientos = emptyList()
+        documentos = emptyList(); trabajos = emptyList(); trabajo = null
+    }
+
+    fun clearError() { error = null }
+
+    private suspend fun action(block: suspend () -> Unit) {
+        loading = true; error = null
+        try { block() } catch (e: Exception) { error = mensajeError(e) }
+        finally { loading = false }
+    }
+}
+
+// FH-006 / P6-C3: compartido con FlujoViewModel. Valida tipo y tamano y copia el contenido a un temporal con limite
+// de bytes, sin cargarlo en memoria.
+internal fun prepararDocumentoLocal(app: Application, uri: Uri): DocumentoLocal {
         val resolver = app.contentResolver
         var temporal: File? = null
         try {
@@ -184,49 +208,46 @@ class FacilityViewModel(application: Application) : AndroidViewModel(application
             throw e as? DocumentoNoValidoException
                 ?: DocumentoNoValidoException("No se pudo leer el archivo seleccionado.")
         }
-    }
-
-    fun logout() {
-        tokenStore.clear(); loggedIn = false; userName = ""; role = ""
-        centros = emptyList(); locales = emptyList(); obligaciones = emptyList(); mantenimientos = emptyList()
-        documentos = emptyList(); trabajos = emptyList(); trabajo = null
-    }
-
-    fun clearError() { error = null }
-
-    private suspend fun action(block: suspend () -> Unit) {
-        loading = true; error = null
-        try { block() } catch (e: Exception) { error = mensajeError(e) }
-        finally { loading = false }
-    }
-
-    private fun mensajeError(e: Exception) = when (e) {
-        is HttpException -> when (e.code()) {
-            401 -> "Sesión caducada. Vuelve a iniciar sesión."
-            403 -> "No tienes permiso para esta acción."
-            404 -> "No se encontró el recurso solicitado."
-            413 -> "El servidor rechazó el archivo por superar el tamaño máximo."
-            in 500..599 -> "Error del servidor (HTTP ${e.code()}). Inténtalo más tarde."
-            else -> "El servidor rechazó la operación (HTTP ${e.code()})"
-        }
-        is IOException -> "No se pudo conectar con el servidor. Inténtalo de nuevo."
-        else -> e.message ?: "Error de comunicacion"
-    }
 }
 
-private val ROLES_GESTION = setOf("ADMIN", "EXPLOTACION")
-private const val ROL_PROVEEDOR = "PROVEEDOR"
+// Mensajes de error comunes. 400 y 409 muestran el detalle del backend (regla de negocio o conflicto de version).
+internal fun mensajeError(e: Exception): String = when (e) {
+    is HttpException -> when (e.code()) {
+        400 -> detalleError(e) ?: "Datos no válidos."
+        401 -> "Sesión caducada. Vuelve a iniciar sesión."
+        403 -> "No tienes permiso para esta acción."
+        404 -> "No se encontró el recurso solicitado."
+        409 -> "Conflicto: " + (detalleError(e) ?: "otro usuario modificó el registro o la acción ya no es válida.") + " Recarga los datos."
+        413 -> "El servidor rechazó el archivo por superar el tamaño máximo."
+        in 500..599 -> "Error del servidor (HTTP ${e.code()}). Inténtalo más tarde."
+        else -> "El servidor rechazó la operación (HTTP ${e.code()})"
+    }
+    is IOException -> "No se pudo conectar con el servidor. Inténtalo de nuevo."
+    else -> e.message ?: "Error de comunicacion"
+}
+
+// Extrae "detail" de la respuesta ProblemDetail sin dependencias adicionales.
+private fun detalleError(e: HttpException): String? = try {
+    val cuerpo = e.response()?.errorBody()?.string().orEmpty()
+    Regex("\"detail\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\.)*)\"").find(cuerpo)?.groupValues?.get(1)?.replace("\\\"", "\"")
+} catch (_: Exception) {
+    null
+}
+
+internal val ROLES_GESTION = setOf("ADMIN", "EXPLOTACION")
+internal const val ROL_PROVEEDOR = "PROVEEDOR"
+internal const val ROL_INQUILINO = "INQUILINO"
 
 const val MAX_BYTES_DOCUMENTO = 20L * 1024 * 1024
 val TIPOS_DOCUMENTO = arrayOf("application/pdf", "image/jpeg", "image/png")
 private const val MENSAJE_TAMANO_MAXIMO = "El archivo supera el máximo de 20 MB."
 
-private class DocumentoLocal(val nombre: String, val mime: String, val archivo: File)
+internal class DocumentoLocal(val nombre: String, val mime: String, val archivo: File)
 private class DocumentoNoValidoException(message: String) : Exception(message)
 
-// Transiciones que ofrece la app; el backend no valida el orden.
+// FH-006 / P6-C3: la app solo ofrece Iniciar. FINALIZADO ya no es una transicion manual: se alcanza registrando y
+// presentando una intervencion, y la validacion decide el cumplimiento (el antiguo boton "Finalizar" daba 409).
 fun siguienteEstado(estado: String): String? = when (estado) {
     "PROGRAMADO", "PENDIENTE" -> "EN_PROCESO"
-    "EN_PROCESO" -> "FINALIZADO"
     else -> null
 }

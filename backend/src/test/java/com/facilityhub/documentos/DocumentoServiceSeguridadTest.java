@@ -69,6 +69,9 @@ class DocumentoServiceSeguridadTest {
         when(usuarioRepository.findByEmailAndActivoTrue(INQUILINO)).thenReturn(Optional.of(inquilino));
         when(ocupacionRepository.existeOcupacionVigente(LOCAL_PROPIO, INQUILINO_ID, HOY)).thenReturn(true);
         when(ocupacionRepository.existeOcupacionVigente(LOCAL_AJENO, INQUILINO_ID, HOY)).thenReturn(false);
+        // P6-C2: ocupacion vigente concreta que cubre el mantenimiento propio.
+        var ocupacion = ocupacionVigente(6001L);
+        when(ocupacionRepository.ocupacionVigente(LOCAL_PROPIO, INQUILINO_ID, HOY)).thenReturn(Optional.of(ocupacion));
 
         when(mantenimientoRepository.findById(MANTENIMIENTO_PROPIO)).thenReturn(Optional.of(propio));
         when(mantenimientoRepository.findById(MANTENIMIENTO_AJENO)).thenReturn(Optional.of(ajeno));

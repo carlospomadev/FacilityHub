@@ -12,4 +12,9 @@ public interface DocumentoMantenimientoRepository extends JpaRepository<Document
 
     List<DocumentoMantenimiento> findByMantenimientoIdAndVisibilidadAndEstadoRevisionOrderByFechaSubidaDesc(
         Long mantenimientoId, VisibilidadDocumento visibilidad, EstadoRevisionDocumento estadoRevision);
+
+    // FH-006 / P6-C1: evidencias y certificados de una intervencion.
+    List<DocumentoMantenimiento> findByIntervencionIdOrderByFechaSubidaAscIdAsc(Long intervencionId);
+
+    long countByIntervencionId(Long intervencionId);
 }

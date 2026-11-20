@@ -4,6 +4,7 @@ import com.facilityhub.domain.DocumentoMantenimiento;
 import com.facilityhub.domain.EstadoRevisionDocumento;
 import com.facilityhub.domain.Inquilino;
 import com.facilityhub.domain.Mantenimiento;
+import com.facilityhub.domain.OcupacionLocal;
 import com.facilityhub.domain.Usuario;
 import com.facilityhub.domain.VisibilidadDocumento;
 import com.facilityhub.repository.OcupacionLocalRepository;
@@ -115,6 +116,23 @@ public class DocumentoAutorizacionService {
         return Optional.of(usuario.getProveedor().getId());
     }
 
+    // FH-006 / P6-C2: ocupacion vigente concreta del inquilino en el local (vacio si no la tiene o no es INQUILINO).
+    public Optional<OcupacionLocal> ocupacionVigente(Usuario usuario, Long localId) {
+        return inquilinoConAcceso(usuario)
+            .flatMap(inquilinoId -> ocupacionRepository.ocupacionVigente(localId, inquilinoId, hoy()));
+    }
+
+    // FH-006 / P6-C2 (C8): proteccion del historial ante cambios de ocupacion. Un mantenimiento vinculado a una
+    // ocupacion solo es de esa ocupacion; si no lo esta, su fecha del hecho debe caer dentro de la ocupacion.
+    public static boolean cubreMantenimiento(OcupacionLocal ocupacion, Mantenimiento mantenimiento) {
+        if (mantenimiento.getOcupacion() != null) {
+            return mantenimiento.getOcupacion().getId().equals(ocupacion.getId());
+        }
+        LocalDate fecha = mantenimiento.fechaDelHecho();
+        return !fecha.isBefore(ocupacion.getFechaInicio())
+            && (ocupacion.getFechaFin() == null || !fecha.isAfter(ocupacion.getFechaFin()));
+    }
+
     public boolean puedeLeerMantenimiento(Usuario usuario, Mantenimiento mantenimiento) {
         if (esGestion(usuario)) {
             return true;
@@ -123,7 +141,12 @@ public class DocumentoAutorizacionService {
         if (mantenimiento.getObligacion().getLocal() == null) {
             return false;
         }
-        return puedeAccederLocal(usuario, mantenimiento.getObligacion().getLocal().getId());
+        // Regla P5 (ocupacion propia vigente) y, ademas, que esa ocupacion cubra el mantenimiento (no el historial de
+        // otro ocupante).
+        Long localId = mantenimiento.getObligacion().getLocal().getId();
+        return puedeAccederLocal(usuario, localId) && ocupacionVigente(usuario, localId)
+            .map(ocupacion -> cubreMantenimiento(ocupacion, mantenimiento))
+            .orElse(false);
     }
 
     public boolean puedeLeerDocumento(Usuario usuario, DocumentoMantenimiento documento) {

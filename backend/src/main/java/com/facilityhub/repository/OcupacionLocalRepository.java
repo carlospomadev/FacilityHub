@@ -41,4 +41,48 @@ public interface OcupacionLocalRepository extends JpaRepository<OcupacionLocal, 
           and (o.fechaFin is null or o.fechaFin >= :hoy)
         """)
     boolean existeOcupacionVigenteDelLocal(@Param("localId") Long localId, @Param("hoy") LocalDate hoy);
+
+    // FH-006 / P6-C2: la ocupacion vigente concreta de un inquilino en un local (misma regla que existeOcupacionVigente).
+    @Query("""
+        select o from OcupacionLocal o
+          join o.local l
+          join l.centro c
+        where l.id = :localId
+          and o.inquilino.id = :inquilinoId
+          and o.activo = true
+          and o.fechaInicio <= :hoy
+          and (o.fechaFin is null or o.fechaFin >= :hoy)
+          and l.activo = true
+          and c.activo = true
+        """)
+    Optional<OcupacionLocal> ocupacionVigente(@Param("localId") Long localId,
+                                              @Param("inquilinoId") Long inquilinoId,
+                                              @Param("hoy") LocalDate hoy);
+
+    // FH-006 / P6-C2: ocupaciones vigentes del inquilino (con su local), para listar sus obligaciones.
+    @Query("""
+        select o from OcupacionLocal o
+          join fetch o.local l
+          join l.centro c
+        where o.inquilino.id = :inquilinoId
+          and o.activo = true
+          and o.fechaInicio <= :hoy
+          and (o.fechaFin is null or o.fechaFin >= :hoy)
+          and l.activo = true
+          and c.activo = true
+        order by l.codigo asc
+        """)
+    java.util.List<OcupacionLocal> ocupacionesVigentesDeInquilino(@Param("inquilinoId") Long inquilinoId,
+                                                                  @Param("hoy") LocalDate hoy);
+
+    // FH-006 / P6-C2: ocupacion vigente del local (cualquier inquilino), para validar asignaciones de gestion en
+    // obligaciones INQUILINO.
+    @Query("""
+        select o from OcupacionLocal o
+        where o.local.id = :localId
+          and o.activo = true
+          and o.fechaInicio <= :hoy
+          and (o.fechaFin is null or o.fechaFin >= :hoy)
+        """)
+    java.util.List<OcupacionLocal> ocupacionesVigentesDelLocal(@Param("localId") Long localId, @Param("hoy") LocalDate hoy);
 }

@@ -14,11 +14,13 @@ import com.facilityhub.domain.ObligacionMantenimiento;
 import com.facilityhub.domain.Rol;
 import com.facilityhub.domain.TipoMantenimiento;
 import com.facilityhub.domain.Usuario;
+import com.facilityhub.repository.IntervencionRepository;
 import com.facilityhub.repository.LocalComercialRepository;
 import com.facilityhub.repository.MantenimientoRepository;
 import com.facilityhub.repository.ObligacionMantenimientoRepository;
 import com.facilityhub.repository.OcupacionLocalRepository;
 import com.facilityhub.repository.UsuarioRepository;
+import com.facilityhub.service.ConflictoException;
 import com.facilityhub.service.DocumentoAutorizacionService;
 import com.facilityhub.service.MantenimientoService;
 import com.facilityhub.service.ObligacionService;
@@ -77,11 +79,17 @@ class ObligacionesMantenimientosA2UnitTest {
         mantenimientoRepository = mock(MantenimientoRepository.class);
         DocumentoAutorizacionService autorizacion = new DocumentoAutorizacionService(usuarioRepository, ocupacionRepository, RELOJ);
         obligacionService = new ObligacionService(localRepository, obligacionRepository, ocupacionRepository, autorizacion);
-        mantenimientoService = new MantenimientoService(mantenimientoRepository, obligacionRepository, autorizacion);
+        mantenimientoService = new MantenimientoService(mantenimientoRepository, obligacionRepository, autorizacion,
+            mock(IntervencionRepository.class));
 
         // existeOcupacionVigente ya incluye ocupacion activa y vigente, local activo y centro activo (B1).
         when(ocupacionRepository.existeOcupacionVigente(LOCAL_PROPIO, INQUILINO_ID, HOY)).thenReturn(true);
         when(ocupacionRepository.existeOcupacionVigente(LOCAL_AJENO, INQUILINO_ID, HOY)).thenReturn(false);
+        // P6-C2: ocupacion vigente concreta, iniciada antes de los mantenimientos sinteticos (historial protegido).
+        com.facilityhub.domain.OcupacionLocal ocupacion = mock(com.facilityhub.domain.OcupacionLocal.class);
+        when(ocupacion.getId()).thenReturn(6001L);
+        when(ocupacion.getFechaInicio()).thenReturn(LocalDate.of(2000, 1, 1));
+        when(ocupacionRepository.ocupacionVigente(LOCAL_PROPIO, INQUILINO_ID, HOY)).thenReturn(Optional.of(ocupacion));
         when(localRepository.existsById(LOCAL_PROPIO)).thenReturn(true);
         when(localRepository.existsById(LOCAL_AJENO)).thenReturn(true);
 
@@ -237,7 +245,9 @@ class ObligacionesMantenimientosA2UnitTest {
     }
 
     @Test
-    void finalizarConservaLaTransicionYElCalculoDeProximaFecha() {
+    // FH-006 / P6-C1 (cambio intencionado): este endpoint P5 ya no finaliza ni recalcula; FINALIZADO solo llega
+    // presentando una intervencion y la proxima fecha solo cambia al aprobarla (no se elude la validacion).
+    void finalizarPorElEndpointP5SeRechazaYNoRecalcula() {
         registrar("admin@sintetico.test", usuario("ADMIN", null));
         TipoMantenimiento tipo = mock(TipoMantenimiento.class);
         when(tipo.getPeriodicidadMeses()).thenReturn(6);
@@ -248,16 +258,17 @@ class ObligacionesMantenimientosA2UnitTest {
         when(mantenimientoRepository.findById(MANTENIMIENTO_ID)).thenReturn(Optional.of(mantenimiento));
         LocalDate realizacion = LocalDate.of(2026, 11, 10);
 
-        MantenimientoDto dto = mantenimientoService.cambiarEstado(MANTENIMIENTO_ID,
-            new CambiarEstadoMantenimientoRequest(EstadoMantenimiento.FINALIZADO, realizacion, "Cierre sintetico"), "admin@sintetico.test");
+        assertThatThrownBy(() -> mantenimientoService.cambiarEstado(MANTENIMIENTO_ID,
+                new CambiarEstadoMantenimientoRequest(EstadoMantenimiento.FINALIZADO, realizacion, "Cierre sintetico"), "admin@sintetico.test"))
+            .isInstanceOf(ConflictoException.class);
 
-        assertThat(dto.estado()).isEqualTo("FINALIZADO");
-        assertThat(dto.observaciones()).isEqualTo("Cierre sintetico");
-        verify(obligacion).actualizarProximaFecha(LocalDate.of(2027, 5, 10));
+        assertThat(mantenimiento.getEstado()).isEqualTo(EstadoMantenimiento.PROGRAMADO);
+        assertThat(mantenimiento.getFechaRealizacion()).isNull();
+        verify(obligacion, never()).actualizarProximaFecha(any());
     }
 
     @Test
-    void finalizarSinFechaSigueRechazandoseYNoRecalcula() {
+    void finalizarSinFechaTambienSeRechazaYNoRecalcula() {
         registrar("admin@sintetico.test", usuario("ADMIN", null));
         ObligacionMantenimiento obligacion = mock(ObligacionMantenimiento.class);
         Mantenimiento mantenimiento = new Mantenimiento(obligacion, HOY, "Sintetico");
@@ -265,7 +276,7 @@ class ObligacionesMantenimientosA2UnitTest {
 
         assertThatThrownBy(() -> mantenimientoService.cambiarEstado(MANTENIMIENTO_ID,
                 new CambiarEstadoMantenimientoRequest(EstadoMantenimiento.FINALIZADO, null, null), "admin@sintetico.test"))
-            .isInstanceOf(IllegalArgumentException.class);
+            .isInstanceOf(ConflictoException.class);
         verify(obligacion, never()).actualizarProximaFecha(any());
     }
 
@@ -334,6 +345,10 @@ class ObligacionesMantenimientosA2UnitTest {
     private static Mantenimiento mantenimiento(Long obligacionId, String observaciones) {
         ObligacionMantenimiento obligacion = mock(ObligacionMantenimiento.class);
         when(obligacion.getId()).thenReturn(obligacionId);
+        // P6-C2: el filtro historico por mantenimiento necesita el local de la obligacion.
+        com.facilityhub.domain.LocalComercial local = mock(com.facilityhub.domain.LocalComercial.class);
+        when(local.getId()).thenReturn(LOCAL_PROPIO);
+        when(obligacion.getLocal()).thenReturn(local);
         Mantenimiento mantenimiento = new Mantenimiento(obligacion, HOY, "Descripcion sintetica");
         mantenimiento.cambiarEstado(EstadoMantenimiento.PENDIENTE, null, observaciones);
         return mantenimiento;
