@@ -60,4 +60,9 @@ class FacilityRepository(private val api: FacilityApi, private val tokenStore: T
     suspend fun fijarFechaPrevista(mantenimientoId: Long, fecha: String, version: Long) =
         api.fijarFechaPrevista(mantenimientoId, FechaPrevistaRequest(fecha, version))
     suspend fun asignarProveedorAceptado(mantenimientoId: Long) = api.asignarProveedorAceptado(mantenimientoId, AsignacionInquilinoRequest(null))
+
+    // ---------- FH-006 / P6-D1 ----------
+    suspend fun alertas(soloNoLeidas: Boolean) = api.alertas(soloNoLeidas)
+    suspend fun alertasNoLeidas() = api.alertasNoLeidas().noLeidas
+    suspend fun marcarAlertaLeida(id: Long) = api.marcarAlertaLeida(id)
 }

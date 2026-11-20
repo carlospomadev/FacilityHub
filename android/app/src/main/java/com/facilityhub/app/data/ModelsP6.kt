@@ -189,3 +189,20 @@ data class DeclaracionPendienteDto(
 )
 
 data class RevisionDeclaracionRequest(val accion: String, val motivo: String?, val version: Long)
+
+// ---------- Alertas internas (P6-D1) ----------
+
+// Alerta propia del usuario autenticado. Los identificadores solo sirven para navegar: la pantalla de destino vuelve a
+// pedir el recurso al backend, que comprueba los permisos (una alerta no concede acceso).
+data class AlertaDto(
+    val id: Long,
+    val tipo: String,
+    val mensaje: String,
+    val mantenimientoId: Long?,
+    val obligacionId: Long?,
+    val intervencionId: Long?,
+    val createdAt: String?,
+    val leidaAt: String?
+)
+
+data class NoLeidasDto(val noLeidas: Long)

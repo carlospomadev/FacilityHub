@@ -70,7 +70,8 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun FacilityHubApp(
     vm: FacilityViewModel = viewModel(),
-    flujo: FlujoViewModel = viewModel()
+    flujo: FlujoViewModel = viewModel(),
+    alertas: AlertasViewModel = viewModel()
 ) {
 
     val nav = rememberNavController()
@@ -78,9 +79,15 @@ fun FacilityHubApp(
     val salir: () -> Unit = {
         vm.logout()
         flujo.limpiarSesion()
+        alertas.limpiar()
         nav.navigate("login") {
             popUpTo(0)
         }
+    }
+
+    // FH-006 / P6-D1: acceso a la bandeja desde las pantallas raiz (solo con sesion iniciada).
+    val botonAlertas: @Composable () -> Unit = {
+        BotonAlertas(alertas) { nav.navigate("alertas") }
     }
 
     // FH-006 / P6-B: pantalla inicial por rol (PROVEEDOR -> "trabajos"; el resto -> "centros").
@@ -119,8 +126,32 @@ fun FacilityHubApp(
                     nav.navigate("trabajo/${trabajo.mantenimientoId}")
                 },
 
-                onLogout = salir
+                onLogout = salir,
+
+                accionAlertas = botonAlertas
             )
+        }
+
+
+        // FH-006 / P6-D1: «Mis notificaciones». Abrir una alerta lleva a la pantalla compatible, que vuelve a validar
+        // el acceso contra el backend.
+        composable("alertas") {
+            MisNotificacionesScreen(
+                alertas = alertas,
+                rol = vm.role,
+                onAbrir = { destino ->
+                    when (destino) {
+                        is DestinoAlerta.Trabajo -> nav.navigate("trabajo/${destino.mantenimientoId}")
+                        is DestinoAlerta.Intervencion -> nav.navigate("intervencion/${destino.intervencionId}")
+                        DestinoAlerta.Declaraciones -> nav.navigate("declaraciones")
+                        is DestinoAlerta.MantenimientosInquilino ->
+                            nav.navigate("inquilino-mant/${destino.obligacionId}/${enc("Mantenimientos")}")
+                    }
+                },
+                onSesionCaducada = salir
+            ) {
+                nav.popBackStack()
+            }
         }
 
 
@@ -240,7 +271,9 @@ fun FacilityHubApp(
 
                 onLogout = salir,
 
-                onMenu = { ruta -> nav.navigate(ruta) }
+                onMenu = { ruta -> nav.navigate(ruta) },
+
+                accionAlertas = botonAlertas
             )
         }
 
