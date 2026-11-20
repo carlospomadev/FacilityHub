@@ -133,6 +133,14 @@ class FlujoViewModel(application: Application) : AndroidViewModel(application) {
         pendientes = repository.pendientesValidacion()
     }
 
+    // ---------- Gestion: asignacion (los permisos por responsabilidad los aplica el backend) ----------
+
+    fun asignarProveedor(mantenimientoId: Long, proveedorId: Long) = escritura {
+        asignacion = repository.asignar(mantenimientoId, proveedorId)
+        asignacionConsultada = true
+        aviso = "Proveedor asignado."
+    }
+
     // ---------- Gestion: declaraciones y solicitudes ----------
 
     fun revisarDeclaracion(d: DeclaracionPendienteDto, aceptar: Boolean, motivo: String) = escritura {

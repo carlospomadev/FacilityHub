@@ -79,6 +79,8 @@ data class ProveedorDto(
     val tecnicos: List<TecnicoDto>?
 )
 
+data class AsignacionRequest(val proveedorId: Long, val tecnicoUsuarioId: Long?)
+
 data class AsignacionDto(
     val id: Long,
     val mantenimientoId: Long,

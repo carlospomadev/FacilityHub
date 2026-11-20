@@ -46,6 +46,7 @@ class FacilityRepository(private val api: FacilityApi, private val tokenStore: T
     suspend fun descargarDocumento(documentoId: Long) = api.descargarDocumento(documentoId)
     suspend fun proveedores() = api.proveedores()
     suspend fun asignacion(mantenimientoId: Long) = api.asignacion(mantenimientoId)
+    suspend fun asignar(mantenimientoId: Long, proveedorId: Long) = api.asignar(mantenimientoId, AsignacionRequest(proveedorId, null))
     suspend fun declaracionesPendientes() = api.declaracionesPendientes()
     suspend fun revisarDeclaracion(id: Long, request: RevisionDeclaracionRequest) = api.revisarDeclaracion(id, request)
     suspend fun solicitudesGestion() = api.solicitudesGestion()

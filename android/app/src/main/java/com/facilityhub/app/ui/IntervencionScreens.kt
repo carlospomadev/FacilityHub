@@ -252,7 +252,10 @@ fun MantenimientoGestionScreen(
 ) {
     LaunchedEffect(mantenimientoId) {
         flujo.limpiarMensajes(); flujo.cargarAsignacion(mantenimientoId); flujo.cargarIntervencionesMantenimiento(mantenimientoId)
+        flujo.cargarProveedores()
     }
+    var proveedorElegido by remember(mantenimientoId) { mutableStateOf<ProveedorDto?>(null) }
+    var confirmarAsignacion by remember { mutableStateOf(false) }
     ScreenScaffold(title = "Intervenciones", subtitle = titulo, onAction = onBack, scrollable = true) {
         MensajesFlujo(flujo)
         SectionTitle("Asignación")
@@ -264,10 +267,42 @@ fun MantenimientoGestionScreen(
         } else if (flujo.asignacionConsultada) {
             Text("Sin proveedor asignado.")
         }
+        // FH-006 / P6-C3: asignar o reasignar (gestion). En obligaciones del inquilino el backend lo impide salvo el
+        // proveedor aceptado (403/409 con su mensaje).
+        val activos = flujo.proveedores.filter { it.activo && it.id != a?.proveedorId }
+        if (activos.isNotEmpty()) {
+            Text(if (a == null) "Asignar proveedor" else "Reasignar a otro proveedor", style = MaterialTheme.typography.labelLarge,
+                modifier = Modifier.padding(top = 8.dp))
+            activos.forEach { p ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    RadioButton(selected = proveedorElegido?.id == p.id, onClick = { proveedorElegido = p })
+                    Text("${p.razonSocial}${p.cif?.let { " · $it" }.orEmpty()}")
+                }
+            }
+            Button(onClick = { confirmarAsignacion = true }, enabled = proveedorElegido != null && !flujo.loading) {
+                Text(if (a == null) "Asignar" else "Reasignar")
+            }
+        }
         Text("El cumplimiento se declara aprobando una intervención presentada; no hay finalización manual.",
             style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(vertical = 6.dp))
         SectionTitle("Intervenciones")
         ListaIntervenciones(flujo.intervencionesMantenimiento, onIntervencion)
+    }
+
+    proveedorElegido?.takeIf { confirmarAsignacion }?.let { p ->
+        AlertDialog(
+            onDismissRequest = { confirmarAsignacion = false },
+            title = { Text("Asignar proveedor") },
+            text = { Text("Se asignará ${p.razonSocial}. Si había otra empresa asignada, perderá el acceso a este trabajo.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmarAsignacion = false
+                    flujo.asignarProveedor(mantenimientoId, p.id)
+                    proveedorElegido = null
+                }) { Text("Asignar") }
+            },
+            dismissButton = { TextButton(onClick = { confirmarAsignacion = false }) { Text("Cancelar") } }
+        )
     }
 }
 

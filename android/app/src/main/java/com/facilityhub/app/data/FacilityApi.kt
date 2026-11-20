@@ -96,6 +96,10 @@ interface FacilityApi {
     @GET("api/mantenimientos/{id}/asignacion")
     suspend fun asignacion(@Path("id") mantenimientoId: Long): AsignacionDto
 
+    // Gestion: asignar o reasignar (NHOOD; en obligaciones INQUILINO el backend responde 403/409).
+    @PUT("api/mantenimientos/{id}/asignacion")
+    suspend fun asignar(@Path("id") mantenimientoId: Long, @Body request: AsignacionRequest): AsignacionDto
+
     @GET("api/declaraciones-proveedor/pendientes")
     suspend fun declaracionesPendientes(): List<DeclaracionPendienteDto>
 
