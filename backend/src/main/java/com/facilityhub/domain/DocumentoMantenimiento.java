@@ -18,8 +18,27 @@ public class DocumentoMantenimiento {
     @Column(columnDefinition = "text") private String observaciones;
     @Column(name = "fecha_subida", nullable = false) private LocalDateTime fechaSubida;
     @Enumerated(EnumType.STRING) @Column(nullable = false, length = 20) private VisibilidadDocumento visibilidad = VisibilidadDocumento.INTERNO;
+    // FH-006 / P6-C1: evidencia o certificado de una intervencion, con su autor. Nulos en los documentos P5.
+    @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "intervencion_id") private Intervencion intervencion;
+    @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "subido_por_usuario_id") private Usuario subidoPor;
+    @Enumerated(EnumType.STRING) @Column(length = 20) private CategoriaDocumento categoria;
 
     protected DocumentoMantenimiento() {}
+
+    // FH-006 / P6-C1: documento de una intervencion. Nace INTERNO y PENDIENTE; compartir es siempre explicito (D-11).
+    public static DocumentoMantenimiento deIntervencion(Intervencion intervencion, String nombreOriginal, String rutaArchivo,
+                                                       CategoriaDocumento categoria, Usuario subidoPor) {
+        DocumentoMantenimiento d = new DocumentoMantenimiento(intervencion.getMantenimiento(), nombreOriginal, rutaArchivo,
+            categoria.name(), null, null);
+        d.intervencion = intervencion;
+        d.subidoPor = subidoPor;
+        d.categoria = categoria;
+        return d;
+    }
+
+    public Intervencion getIntervencion() { return intervencion; }
+    public Usuario getSubidoPor() { return subidoPor; }
+    public CategoriaDocumento getCategoria() { return categoria; }
 
     public DocumentoMantenimiento(Mantenimiento mantenimiento, String nombreOriginal, String rutaArchivo,
                                   String tipoDocumento, LocalDate fechaDocumento, LocalDate fechaCaducidad) {

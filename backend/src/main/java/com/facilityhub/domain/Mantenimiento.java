@@ -42,6 +42,35 @@ public class Mantenimiento {
     public long getVersion() { return version; }
     public boolean isValidacionRequerida() { return validacionRequerida; }
 
+    // FH-006 / P6-C1: transiciones operativas ligadas a las intervenciones (no tocan las observaciones internas).
+    public void iniciarEjecucion(LocalDateTime ahora) {
+        if (estado == EstadoMantenimiento.PROGRAMADO || estado == EstadoMantenimiento.PENDIENTE) {
+            this.estado = EstadoMantenimiento.EN_PROCESO;
+            this.updatedAt = ahora;
+        }
+    }
+
+    // Envio de una ejecucion realizada: FINALIZADO significa "ejecutado y enviado", no cumplido (lo decide la validacion).
+    public void registrarEjecucion(LocalDate fechaEjecucion, LocalDateTime ahora) {
+        this.estado = EstadoMantenimiento.FINALIZADO;
+        this.fechaRealizacion = fechaEjecucion;
+        this.updatedAt = ahora;
+    }
+
+    // Correccion solicitada: la ejecucion deja de considerarse finalizada hasta un nuevo envio.
+    public void reabrirEjecucion(LocalDateTime ahora) {
+        this.estado = EstadoMantenimiento.EN_PROCESO;
+        this.fechaRealizacion = null;
+        this.updatedAt = ahora;
+    }
+
+    // NO_REALIZADO: queda pendiente de reprogramar; nunca FINALIZADO.
+    public void marcarNoRealizado(LocalDateTime ahora) {
+        this.estado = EstadoMantenimiento.PROGRAMADO;
+        this.fechaRealizacion = null;
+        this.updatedAt = ahora;
+    }
+
     // FH-006: estados en los que un mantenimiento admite (re)asignacion de proveedor.
     public boolean admiteAsignacion() {
         return estado == EstadoMantenimiento.PROGRAMADO

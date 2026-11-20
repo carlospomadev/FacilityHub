@@ -83,8 +83,17 @@ public class DocumentoService {
         autorizacion.exigirGestion(autorizacion.usuarioActual(email));
         DocumentoMantenimiento documento = documentoRepository.findById(documentoId)
             .orElseThrow(RecursoNoDisponibleException::new);
+        exigirDocumentoP5(documento);
         documento.revisar(request.estado(), request.observaciones());
         return toDto(documento);
+    }
+
+    // FH-006 / P6-C1: los documentos de una intervencion solo se revisan y comparten en su validacion; los endpoints P5
+    // no pueden validarlos ni compartirlos por su cuenta (p. ej. evidencias de un intento NO_REALIZADO).
+    private static void exigirDocumentoP5(DocumentoMantenimiento documento) {
+        if (documento.getIntervencion() != null) {
+            throw new ConflictoException("Los documentos de una intervencion se gestionan en su validacion");
+        }
     }
 
     @Transactional
@@ -92,6 +101,7 @@ public class DocumentoService {
         autorizacion.exigirGestion(autorizacion.usuarioActual(email));
         DocumentoMantenimiento documento = documentoRepository.findById(documentoId)
             .orElseThrow(RecursoNoDisponibleException::new);
+        exigirDocumentoP5(documento);
         documento.cambiarVisibilidad(request.visibilidad());
         return toDto(documento);
     }

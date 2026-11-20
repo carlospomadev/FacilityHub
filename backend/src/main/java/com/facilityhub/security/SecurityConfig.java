@@ -89,6 +89,19 @@ public class SecurityConfig {
                 // FH-006: PROVEEDOR solo accede a sus trabajos; nunca a centros, locales, obligaciones ni mantenimientos.
                 .requestMatchers(HttpMethod.GET, "/api/proveedor/trabajos", "/api/proveedor/trabajos/*")
                     .hasRole("PROVEEDOR")
+                // FH-006 / P6-C1: intervenciones. Validar y la bandeja, solo gestion; el resto, gestion o el PROVEEDOR
+                // (permisos finos por recurso en el servicio). Van antes de las reglas generales de /api/mantenimientos.
+                .requestMatchers(HttpMethod.POST, "/api/intervenciones/*/validacion")
+                    .hasAnyRole("ADMIN", "EXPLOTACION")
+                .requestMatchers(HttpMethod.GET, "/api/intervenciones/pendientes")
+                    .hasAnyRole("ADMIN", "EXPLOTACION")
+                .requestMatchers(HttpMethod.GET, "/api/mantenimientos/*/intervenciones", "/api/intervenciones/*")
+                    .hasAnyRole("ADMIN", "EXPLOTACION", "PROVEEDOR")
+                .requestMatchers(HttpMethod.POST, "/api/mantenimientos/*/intervenciones", "/api/intervenciones/*/documentos",
+                    "/api/intervenciones/*/envio")
+                    .hasAnyRole("ADMIN", "EXPLOTACION", "PROVEEDOR")
+                .requestMatchers(HttpMethod.PATCH, "/api/intervenciones/*")
+                    .hasAnyRole("ADMIN", "EXPLOTACION", "PROVEEDOR")
                 .requestMatchers(HttpMethod.GET, "/api/proveedores", "/api/proveedores/*")
                     .hasAnyRole("ADMIN", "EXPLOTACION")
                 .requestMatchers("/api/proveedores/**")

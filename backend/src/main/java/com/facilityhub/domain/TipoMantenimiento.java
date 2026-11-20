@@ -12,8 +12,12 @@ public class TipoMantenimiento {
     @Column(name = "periodicidad_meses", nullable = false) private Integer periodicidadMeses;
     @Column(name = "requiere_documento", nullable = false) private boolean requiereDocumento = true;
     @Column(nullable = false) private boolean activo = true;
+    // FH-006 / P6-C1 (D-7): regla de recalculo de la proxima fecha.
+    @Enumerated(EnumType.STRING) @Column(name = "regla_recalculo", nullable = false, length = 30)
+    private ReglaRecalculo reglaRecalculo = ReglaRecalculo.DESDE_EJECUCION;
 
     protected TipoMantenimiento() {}
+    public ReglaRecalculo getReglaRecalculo() { return reglaRecalculo == null ? ReglaRecalculo.DESDE_EJECUCION : reglaRecalculo; }
     public Long getId() { return id; }
     public String getCodigo() { return codigo; }
     public String getNombre() { return nombre; }

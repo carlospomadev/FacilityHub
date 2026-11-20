@@ -2,6 +2,8 @@ package com.facilityhub.service;
 
 import com.facilityhub.api.dto.proveedor.TrabajoProveedorDto;
 import com.facilityhub.domain.AsignacionMantenimiento;
+import com.facilityhub.domain.Intervencion;
+import com.facilityhub.repository.IntervencionRepository;
 import com.facilityhub.domain.Mantenimiento;
 import com.facilityhub.domain.ObligacionMantenimiento;
 import com.facilityhub.domain.Usuario;
@@ -21,12 +23,15 @@ public class TrabajoProveedorService {
     private final AsignacionMantenimientoRepository asignacionRepository;
     private final DocumentoAutorizacionService autorizacion;
     private final PoliticaAccesoService politica;
+    private final IntervencionRepository intervencionRepository;
 
     public TrabajoProveedorService(AsignacionMantenimientoRepository asignacionRepository,
-                                   DocumentoAutorizacionService autorizacion, PoliticaAccesoService politica) {
+                                   DocumentoAutorizacionService autorizacion, PoliticaAccesoService politica,
+                                   IntervencionRepository intervencionRepository) {
         this.asignacionRepository = asignacionRepository;
         this.autorizacion = autorizacion;
         this.politica = politica;
+        this.intervencionRepository = intervencionRepository;
     }
 
     public List<TrabajoProveedorDto> listar(String email) {
@@ -59,6 +64,9 @@ public class TrabajoProveedorService {
     private TrabajoProveedorDto toDto(Usuario usuario, AsignacionMantenimiento a) {
         Mantenimiento m = a.getMantenimiento();
         ObligacionMantenimiento o = m.getObligacion();
+        Optional<Intervencion> ultima = intervencionRepository.findByMantenimientoIdOrderByIdDesc(m.getId()).stream()
+            .filter(i -> i.getProveedor().getId().equals(a.getProveedor().getId()))
+            .findFirst();
         String local = o.getLocal() == null ? null
             : o.getLocal().getNombre() == null ? o.getLocal().getCodigo()
             : o.getLocal().getCodigo() + " · " + o.getLocal().getNombre();
@@ -74,7 +82,9 @@ public class TrabajoProveedorService {
             o.getResponsable().name(),
             AsignacionService.nombreCompleto(a.getTecnico()),
             a.getAsignadoAt(),
-            politica.accionesTrabajoProveedor(usuario, a)
+            politica.accionesTrabajoProveedor(usuario, a),
+            ultima.map(Intervencion::getId).orElse(null),
+            ultima.map(i -> i.getEstadoValidacion().name()).orElse(null)
         );
     }
 }
