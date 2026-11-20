@@ -79,10 +79,12 @@ class ProveedoresAsignacionesP6BUnitTest {
         proveedorService = new ProveedorService(proveedorRepository, usuarioRepository, rolRepository,
             asignacionRepository, autorizacion, passwordEncoder, RELOJ);
         // P6-C2: el servicio de asignacion recibe ademas las declaraciones de proveedor del inquilino y la auditoria.
+        // P6-D1: alertas simuladas (sus reglas se prueban en AlertasP6D1UnitTest).
         DeclaracionProveedorService declaraciones = new DeclaracionProveedorService(mock(ObligacionProveedorRepository.class),
-            obligacionRepository, ocupacionRepository, proveedorRepository, autorizacion, mock(AuditoriaService.class), RELOJ);
+            obligacionRepository, ocupacionRepository, proveedorRepository, autorizacion, mock(AuditoriaService.class),
+            mock(AlertaService.class), RELOJ);
         asignacionService = new AsignacionService(mantenimientoRepository, asignacionRepository, proveedorRepository,
-            usuarioRepository, autorizacion, politica, declaraciones, mock(AuditoriaService.class), RELOJ);
+            usuarioRepository, autorizacion, politica, declaraciones, mock(AuditoriaService.class), mock(AlertaService.class), RELOJ);
         trabajoService = new TrabajoProveedorService(asignacionRepository, autorizacion, politica, intervencionRepository);
         obligacionService = new ObligacionService(localRepository, obligacionRepository, ocupacionRepository, autorizacion);
         mantenimientoService = new MantenimientoService(mantenimientoRepository, obligacionRepository, autorizacion, intervencionRepository);
