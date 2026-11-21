@@ -109,6 +109,10 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.PATCH, "/api/alertas/*/leida")
                     .hasAnyRole("ADMIN", "EXPLOTACION", "INQUILINO", "PROVEEDOR")
                 // FH-006 / P6-C2: area del INQUILINO (ocupacion y responsabilidad se comprueban en los servicios).
+                // FH-006 / P6-D2: ejecucion manual de recordatorios.
+                .requestMatchers(HttpMethod.POST, "/api/admin/recordatorios/ejecutar")
+                .hasRole("ADMIN")
+
                 .requestMatchers("/api/inquilino/**")
                     .hasRole("INQUILINO")
                 // Declaraciones de proveedor: revision por gestion. Solicitudes: consulta gestion, resolucion ADMIN.

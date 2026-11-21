@@ -48,3 +48,10 @@ security:
 facilityhub:
   storage:
     root: ${FACILITYHUB_STORAGE_ROOT:./storage/documents}
+  # FH-006 / P6-D2: recordatorios de vencimiento. La tarea programada esta DESACTIVADA por defecto.
+  recordatorios:
+    enabled: ${FACILITYHUB_RECORDATORIOS_ENABLED:false}
+    cron: ${FACILITYHUB_RECORDATORIOS_CRON:0 0 7 * * *}
+    preaviso-dias: 15
+    cadencia-vencido-dias: 7
+    antiguedad-maxima-dias: 90
