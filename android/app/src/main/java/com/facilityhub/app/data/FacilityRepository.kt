@@ -65,4 +65,8 @@ class FacilityRepository(private val api: FacilityApi, private val tokenStore: T
     suspend fun alertas(soloNoLeidas: Boolean) = api.alertas(soloNoLeidas)
     suspend fun alertasNoLeidas() = api.alertasNoLeidas().noLeidas
     suspend fun marcarAlertaLeida(id: Long) = api.marcarAlertaLeida(id)
+
+    // ---------- FH-006 / P6-D3-3 ----------
+    suspend fun resumenGestion() = api.resumenGestion()
+    suspend fun trabajosGestion(filtro: String) = api.trabajosGestion(filtro)
 }

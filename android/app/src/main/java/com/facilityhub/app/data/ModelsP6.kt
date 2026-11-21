@@ -206,3 +206,35 @@ data class AlertaDto(
 )
 
 data class NoLeidasDto(val noLeidas: Long)
+
+// ---------- FH-006 / P6-D3-3: panel de Explotacion (solo lectura) ----------
+
+// Contadores calculados por el backend (mismos listados que /api/gestion/trabajos).
+data class ResumenGestionDto(
+    val fecha: String?,
+    val preavisoDias: Int,
+    val vencidos: Int,
+    val proximos: Int,
+    val pendientesValidacion: Int,
+    val requierenCorreccion: Int,
+    val sinAsignar: Int,
+    val declaracionesPendientes: Int,
+    val solicitudesPendientes: Int
+)
+
+// diasHastaVencimiento lo calcula el backend (negativo = dias de retraso); Android solo lo presenta.
+data class TrabajoGestionDto(
+    val mantenimientoId: Long,
+    val intervencionId: Long?,
+    val tipoMantenimiento: String,
+    val centro: String?,
+    val local: String?,
+    val zonaComun: Boolean,
+    val responsable: String?,
+    val fechaProgramada: String?,
+    val fechaRealizacion: String?,
+    val estado: String?,
+    val estadoIntervencion: String?,
+    val proveedorAsignado: String?,
+    val diasHastaVencimiento: Long
+)

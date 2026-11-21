@@ -130,6 +130,8 @@ fun CentrosScreen(
     ) {
         // FH-006 / P6-C3: accesos por rol (la navegacion no sustituye a los controles del backend).
         if (vm.puedeGestionar) {
+            // FH-006 / P6-D3-3: panel de Explotacion (ADMIN y EXPLOTACION).
+            FilledTonalButton(onClick = { onMenu("panel") }, modifier = Modifier.fillMaxWidth()) { Text("Panel de Explotación") }
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 FilledTonalButton(onClick = { onMenu("validaciones") }) { Text("Validaciones") }
                 OutlinedButton(onClick = { onMenu("proveedores") }) { Text("Proveedores") }

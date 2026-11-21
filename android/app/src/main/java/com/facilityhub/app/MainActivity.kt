@@ -71,7 +71,8 @@ class MainActivity : ComponentActivity() {
 fun FacilityHubApp(
     vm: FacilityViewModel = viewModel(),
     flujo: FlujoViewModel = viewModel(),
-    alertas: AlertasViewModel = viewModel()
+    alertas: AlertasViewModel = viewModel(),
+    panel: PanelViewModel = viewModel()
 ) {
 
     val nav = rememberNavController()
@@ -80,6 +81,7 @@ fun FacilityHubApp(
         vm.logout()
         flujo.limpiarSesion()
         alertas.limpiar()
+        panel.limpiar()
         nav.navigate("login") {
             popUpTo(0)
         }
@@ -190,6 +192,24 @@ fun FacilityHubApp(
             }
         }
 
+
+        // FH-006 / P6-D3-3: panel de Explotacion, solo para gestion (el backend responde 403 al resto).
+        composable("panel") {
+            if (vm.puedeGestionar) {
+                PanelGestionScreen(
+                    panel = panel,
+                    onMantenimiento = { t -> nav.navigate("mant-gestion/${t.mantenimientoId}/${enc(t.tipoMantenimiento)}") },
+                    onIntervencion = { id -> nav.navigate("intervencion/$id") },
+                    onDeclaraciones = { nav.navigate("declaraciones") },
+                    onSolicitudes = { nav.navigate("solicitudes-gestion") },
+                    onSesionCaducada = salir
+                ) {
+                    nav.popBackStack()
+                }
+            } else {
+                SinPermisosScreen(onLogout = salir)
+            }
+        }
 
         composable("validaciones") {
             BandejaValidacionScreen(flujo, onIntervencion = { id -> nav.navigate("intervencion/$id") }) { nav.popBackStack() }
