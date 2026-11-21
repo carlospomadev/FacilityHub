@@ -112,6 +112,9 @@ public class SecurityConfig {
                 // FH-006 / P6-D2: ejecucion manual de recordatorios.
                 .requestMatchers(HttpMethod.POST, "/api/admin/recordatorios/ejecutar")
                 .hasRole("ADMIN")
+                // FH-006 / P6-D3: panel de gestion, solo lectura (otros metodos caen en denyAll).
+                .requestMatchers(HttpMethod.GET, "/api/gestion/**")
+                    .hasAnyRole("ADMIN", "EXPLOTACION")
 
                 .requestMatchers("/api/inquilino/**")
                     .hasRole("INQUILINO")

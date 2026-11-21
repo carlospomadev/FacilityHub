@@ -26,6 +26,10 @@ public interface IntervencionRepository extends JpaRepository<Intervencion, Long
 
     boolean existsByMantenimientoIdAndEstadoValidacionIn(Long mantenimientoId, Collection<EstadoValidacion> estados);
 
+    // FH-006 / P6-D3: intervenciones en los estados indicados de un lote de mantenimientos (una consulta, sin N+1).
+    List<Intervencion> findByMantenimientoIdInAndEstadoValidacionIn(Collection<Long> mantenimientoIds,
+                                                                    Collection<EstadoValidacion> estados);
+
     @Query("""
         select i from Intervencion i
           join fetch i.mantenimiento m
