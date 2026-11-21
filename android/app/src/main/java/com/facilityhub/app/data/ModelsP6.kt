@@ -140,7 +140,9 @@ data class MantenimientoInquilinoDetalleDto(
     val proveedorAsignado: String?,
     val cumplimiento: CumplimientoInquilinoDto?,
     val version: Long,
-    val accionesPermitidas: List<String>?
+    val accionesPermitidas: List<String>?,
+    // FH-006 / P6-D3-6: registro P5 sin validacion (nunca acredita cumplimiento).
+    val historicoP5: Boolean = false
 )
 
 data class ProveedorBasicoDto(val id: Long, val razonSocial: String)
@@ -206,3 +208,70 @@ data class AlertaDto(
 )
 
 data class NoLeidasDto(val noLeidas: Long)
+
+// ---------- FH-006 / P6-D3-3: panel de Explotacion (solo lectura) ----------
+
+// Contadores calculados por el backend (mismos listados que /api/gestion/trabajos).
+data class ResumenGestionDto(
+    val fecha: String?,
+    val preavisoDias: Int,
+    val vencidos: Int,
+    val proximos: Int,
+    val pendientesValidacion: Int,
+    val requierenCorreccion: Int,
+    val sinAsignar: Int,
+    val declaracionesPendientes: Int,
+    val solicitudesPendientes: Int
+)
+
+// diasHastaVencimiento lo calcula el backend (negativo = dias de retraso); Android solo lo presenta.
+data class TrabajoGestionDto(
+    val mantenimientoId: Long,
+    val intervencionId: Long?,
+    val tipoMantenimiento: String,
+    val centro: String?,
+    val local: String?,
+    val zonaComun: Boolean,
+    val responsable: String?,
+    val fechaProgramada: String?,
+    val fechaRealizacion: String?,
+    val estado: String?,
+    val estadoIntervencion: String?,
+    val proveedorAsignado: String?,
+    val diasHastaVencimiento: Long
+)
+
+// ---------- FH-006 / P6-D3-4: historial del local (GET /api/locales/{id}/historial) ----------
+
+// Gestion (ADMIN, EXPLOTACION). tipoRegistro: APROBADO | CERRADO_SIN_CUMPLIMIENTO | HISTORICO_P5. Un HISTORICO_P5 no
+// tiene intervencion ni estadoValidacion: nunca se presenta como aprobado.
+data class HistorialGestionDto(
+    val tipoRegistro: String,
+    val etiqueta: String,
+    val mantenimientoId: Long,
+    val obligacionId: Long,
+    val tipoMantenimiento: String,
+    val instalacion: String?,
+    val responsable: String?,
+    val fechaProgramada: String?,
+    val fechaRealizacion: String?,
+    val estadoMantenimiento: String?,
+    val observaciones: String?,
+    val intervencionId: Long?,
+    val fechaEjecucion: String?,
+    val resultado: String?,
+    val estadoValidacion: String?,
+    val proveedor: String?,
+    val documentos: List<DocumentoIntervencionDto>?
+)
+
+// INQUILINO: solo cumplimientos aprobados de su ocupacion vigente y certificados VALIDO + COMPARTIDO.
+data class HistorialInquilinoDto(
+    val mantenimientoId: Long,
+    val obligacionId: Long,
+    val tipoMantenimiento: String,
+    val instalacion: String?,
+    val fechaProgramada: String?,
+    val fechaRealizacion: String?,
+    val cumplimiento: CumplimientoInquilinoDto?
+)

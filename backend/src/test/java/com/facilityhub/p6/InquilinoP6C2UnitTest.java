@@ -166,6 +166,19 @@ class InquilinoP6C2UnitTest {
         MantenimientoInquilinoDetalleDto dto = inquilinoService.mantenimientos(OBL_I, INQ).get(0);
         assertThat(dto.cumplimiento().certificados()).extracting(CertificadoInquilinoDto::id).containsExactly(81L);
         assertThat(dto.accionesPermitidas()).containsExactly("FIJAR_FECHA_PREVISTA"); // sin proveedor aceptado
+        assertThat(dto.historicoP5()).isFalse();
+    }
+
+    // FH-006 / P6-D3-6: un registro P5 abierto sigue visible y gestionable, marcado como historico sin validacion.
+    @Test
+    void p6c2_11_registroP5MarcadoSinOcultarObligacionesVigentes() {
+        when(obligacionRepository.findById(OBL_I)).thenReturn(Optional.of(obligacionI));
+        when(mantenimientoRepository.findByObligacionIdOrderByFechaProgramadaDesc(OBL_I)).thenReturn(List.of(mantenimiento));
+        doReturn(false).when(mantenimiento).isValidacionRequerida();
+        MantenimientoInquilinoDetalleDto dto = inquilinoService.mantenimientos(OBL_I, INQ).get(0);
+        assertThat(dto.historicoP5()).isTrue();
+        assertThat(dto.cumplimiento()).isNull();
+        assertThat(dto.accionesPermitidas()).containsExactly("FIJAR_FECHA_PREVISTA");
     }
 
     // ---------- Declaracion y revision ----------

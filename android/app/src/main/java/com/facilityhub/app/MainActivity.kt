@@ -71,7 +71,9 @@ class MainActivity : ComponentActivity() {
 fun FacilityHubApp(
     vm: FacilityViewModel = viewModel(),
     flujo: FlujoViewModel = viewModel(),
-    alertas: AlertasViewModel = viewModel()
+    alertas: AlertasViewModel = viewModel(),
+    panel: PanelViewModel = viewModel(),
+    historial: HistorialViewModel = viewModel()
 ) {
 
     val nav = rememberNavController()
@@ -80,6 +82,8 @@ fun FacilityHubApp(
         vm.logout()
         flujo.limpiarSesion()
         alertas.limpiar()
+        panel.limpiar()
+        historial.limpiar()
         nav.navigate("login") {
             popUpTo(0)
         }
@@ -191,6 +195,47 @@ fun FacilityHubApp(
         }
 
 
+        // FH-006 / P6-D3-3: panel de Explotacion, solo para gestion (el backend responde 403 al resto).
+        composable("panel") {
+            if (vm.puedeGestionar) {
+                PanelGestionScreen(
+                    panel = panel,
+                    onMantenimiento = { t -> nav.navigate("mant-gestion/${t.mantenimientoId}/${enc(t.tipoMantenimiento)}") },
+                    onIntervencion = { id -> nav.navigate("intervencion/$id") },
+                    onDeclaraciones = { nav.navigate("declaraciones") },
+                    onSolicitudes = { nav.navigate("solicitudes-gestion") },
+                    onSesionCaducada = salir
+                ) {
+                    nav.popBackStack()
+                }
+            } else {
+                SinPermisosScreen(onLogout = salir)
+            }
+        }
+
+        // FH-006 / P6-D3-4: historial del local (gestion e INQUILINO; el PROVEEDOR no tiene acceso y el backend responde 403).
+        composable(
+            route = "historial/{localId}/{titulo}",
+            arguments = listOf(
+                navArgument("localId") { type = NavType.LongType },
+                navArgument("titulo") { type = NavType.StringType }
+            )
+        ) { entry ->
+            if (vm.puedeGestionar || vm.esInquilino) {
+                HistorialLocalScreen(
+                    historial = historial,
+                    flujo = flujo,
+                    localId = entry.arguments!!.getLong("localId"),
+                    titulo = dec(entry.arguments!!.getString("titulo")!!),
+                    onSesionCaducada = salir
+                ) {
+                    nav.popBackStack()
+                }
+            } else {
+                SinPermisosScreen(onLogout = salir)
+            }
+        }
+
         composable("validaciones") {
             BandejaValidacionScreen(flujo, onIntervencion = { id -> nav.navigate("intervencion/$id") }) { nav.popBackStack() }
         }
@@ -211,7 +256,8 @@ fun FacilityHubApp(
             ObligacionesInquilinoScreen(
                 flujo = flujo,
                 onObligacion = { o -> nav.navigate("inquilino-mant/${o.id}/${enc(o.tipoMantenimiento)}") },
-                onSolicitudes = { nav.navigate("inquilino-solicitudes") }
+                onSolicitudes = { nav.navigate("inquilino-solicitudes") },
+                onHistorial = { localId, local -> nav.navigate("historial/$localId/${enc(local)}") }
             ) {
                 nav.popBackStack()
             }
@@ -364,6 +410,8 @@ fun FacilityHubApp(
                                 obligacion.estado
                     )
                 },
+
+                onHistorial = { nav.navigate("historial/$localId/${enc(nombre)}") },
 
                 onBack = {
                     nav.popBackStack()

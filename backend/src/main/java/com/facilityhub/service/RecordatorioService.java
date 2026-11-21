@@ -126,10 +126,11 @@ public class RecordatorioService {
     Recordatorio clasificar(Mantenimiento m, Intervencion enValidacion, LocalDate hoy) {
         LocalDate fecha = m.getFechaProgramada();
         String descriptor = AlertaService.descriptor(m);
-        if (!fecha.isBefore(hoy)) {
-            if (fecha.isAfter(hoy.plusDays(preavisoDias)) || enValidacion != null) {
-                return null;
-            }
+        ReglaVencimiento.Situacion situacion = ReglaVencimiento.situacion(fecha, hoy, preavisoDias, enValidacion != null);
+        if (situacion == ReglaVencimiento.Situacion.FUERA) {
+            return null;
+        }
+        if (situacion == ReglaVencimiento.Situacion.PROXIMO) {
             return new Recordatorio(TipoAlerta.VENCIMIENTO_PROXIMO, "vence:" + m.getId() + ":" + fecha + ":p" + preavisoDias,
                 null, "Mantenimiento proximo a vencer (" + ChronoUnit.DAYS.between(hoy, fecha) + " dias): " + descriptor);
         }
@@ -138,7 +139,7 @@ public class RecordatorioService {
             return null;
         }
         long bloque = (diasVencido - 1) / cadenciaVencidoDias;
-        if (enValidacion != null) {
+        if (situacion == ReglaVencimiento.Situacion.VALIDACION_PENDIENTE_VENCIDA) {
             return new Recordatorio(TipoAlerta.VALIDACION_PENDIENTE_VENCIDA,
                 "valpend:" + m.getId() + ":" + enValidacion.getId() + ":b" + bloque, enValidacion.getId(),
                 "Validacion pendiente de un mantenimiento vencido: " + descriptor);

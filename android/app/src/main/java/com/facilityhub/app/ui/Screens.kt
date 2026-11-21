@@ -130,6 +130,8 @@ fun CentrosScreen(
     ) {
         // FH-006 / P6-C3: accesos por rol (la navegacion no sustituye a los controles del backend).
         if (vm.puedeGestionar) {
+            // FH-006 / P6-D3-3: panel de Explotacion (ADMIN y EXPLOTACION).
+            FilledTonalButton(onClick = { onMenu("panel") }, modifier = Modifier.fillMaxWidth()) { Text("Panel de Explotación") }
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 FilledTonalButton(onClick = { onMenu("validaciones") }) { Text("Validaciones") }
                 OutlinedButton(onClick = { onMenu("proveedores") }) { Text("Proveedores") }
@@ -244,6 +246,7 @@ fun LocalDetalleScreen(
     localId: Long,
     localNombre: String,
     onObligacion: (ObligacionDto) -> Unit,
+    onHistorial: () -> Unit = {},
     onBack: () -> Unit
 ) {
     LaunchedEffect(localId) {
@@ -289,6 +292,12 @@ fun LocalDetalleScreen(
         Spacer(
             modifier = Modifier.height(16.dp)
         )
+
+        // FH-006 / P6-D3-4: historial del local para gestion (el INQUILINO accede desde «Mis obligaciones»).
+        if (vm.puedeGestionar) {
+            OutlinedButton(onClick = onHistorial, modifier = Modifier.fillMaxWidth()) { Text("Historial de mantenimientos") }
+            Spacer(modifier = Modifier.height(8.dp))
+        }
 
         SectionTitle("Obligaciones de mantenimiento")
 

@@ -14,6 +14,14 @@ public interface AsignacionMantenimientoRepository extends JpaRepository<Asignac
 
     List<AsignacionMantenimiento> findByProveedorIdAndActivaTrue(Long proveedorId);
 
+    // FH-006 / P6-D3: asignaciones activas de un lote de mantenimientos (una consulta; lo que no aparece esta sin asignar).
+    @Query("""
+        select a from AsignacionMantenimiento a
+          join fetch a.proveedor
+        where a.activa = true and a.mantenimiento.id in :mantenimientoIds
+        """)
+    List<AsignacionMantenimiento> activasDeMantenimientos(@Param("mantenimientoIds") java.util.Collection<Long> mantenimientoIds);
+
     // Trabajos visibles para un proveedor: solo asignaciones activas de su empresa, con los datos que muestra el DTO.
     @Query("""
         select a from AsignacionMantenimiento a

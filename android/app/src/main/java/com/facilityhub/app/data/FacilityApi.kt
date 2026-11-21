@@ -123,6 +123,22 @@ interface FacilityApi {
     @PATCH("api/alertas/{id}/leida")
     suspend fun marcarAlertaLeida(@Path("id") id: Long): AlertaDto
 
+    // ---------- FH-006 / P6-D3-3: panel de Explotacion (ADMIN y EXPLOTACION) ----------
+
+    @GET("api/gestion/resumen")
+    suspend fun resumenGestion(): ResumenGestionDto
+
+    @GET("api/gestion/trabajos")
+    suspend fun trabajosGestion(@Query("filtro") filtro: String): List<TrabajoGestionDto>
+
+    // ---------- FH-006 / P6-D3-4: historial del local (mismo endpoint; el backend decide el contenido por rol) ----------
+
+    @GET("api/locales/{id}/historial")
+    suspend fun historialGestion(@Path("id") localId: Long): List<HistorialGestionDto>
+
+    @GET("api/locales/{id}/historial")
+    suspend fun historialInquilino(@Path("id") localId: Long): List<HistorialInquilinoDto>
+
     // ---------- FH-006 / P6-C3: area del INQUILINO ----------
 
     @GET("api/inquilino/obligaciones")

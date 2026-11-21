@@ -153,9 +153,13 @@ public class DocumentoAutorizacionService {
         if (esGestion(usuario)) {
             return true;
         }
+        return visibleParaInquilino(documento) && puedeLeerMantenimiento(usuario, documento.getMantenimiento());
+    }
+
+    // FH-006 / P6-D3-2: regla unica de documento visible para el inquilino (descarga, cumplimiento e historial).
+    public static boolean visibleParaInquilino(DocumentoMantenimiento documento) {
         return documento.getVisibilidad() == VisibilidadDocumento.COMPARTIDO
-            && documento.getEstadoRevision() == EstadoRevisionDocumento.VALIDO
-            && puedeLeerMantenimiento(usuario, documento.getMantenimiento());
+            && documento.getEstadoRevision() == EstadoRevisionDocumento.VALIDO;
     }
 
     private String rol(Usuario usuario) {
