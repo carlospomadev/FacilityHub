@@ -238,3 +238,38 @@ data class TrabajoGestionDto(
     val proveedorAsignado: String?,
     val diasHastaVencimiento: Long
 )
+
+// ---------- FH-006 / P6-D3-4: historial del local (GET /api/locales/{id}/historial) ----------
+
+// Gestion (ADMIN, EXPLOTACION). tipoRegistro: APROBADO | CERRADO_SIN_CUMPLIMIENTO | HISTORICO_P5. Un HISTORICO_P5 no
+// tiene intervencion ni estadoValidacion: nunca se presenta como aprobado.
+data class HistorialGestionDto(
+    val tipoRegistro: String,
+    val etiqueta: String,
+    val mantenimientoId: Long,
+    val obligacionId: Long,
+    val tipoMantenimiento: String,
+    val instalacion: String?,
+    val responsable: String?,
+    val fechaProgramada: String?,
+    val fechaRealizacion: String?,
+    val estadoMantenimiento: String?,
+    val observaciones: String?,
+    val intervencionId: Long?,
+    val fechaEjecucion: String?,
+    val resultado: String?,
+    val estadoValidacion: String?,
+    val proveedor: String?,
+    val documentos: List<DocumentoIntervencionDto>?
+)
+
+// INQUILINO: solo cumplimientos aprobados de su ocupacion vigente y certificados VALIDO + COMPARTIDO.
+data class HistorialInquilinoDto(
+    val mantenimientoId: Long,
+    val obligacionId: Long,
+    val tipoMantenimiento: String,
+    val instalacion: String?,
+    val fechaProgramada: String?,
+    val fechaRealizacion: String?,
+    val cumplimiento: CumplimientoInquilinoDto?
+)

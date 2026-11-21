@@ -69,4 +69,8 @@ class FacilityRepository(private val api: FacilityApi, private val tokenStore: T
     // ---------- FH-006 / P6-D3-3 ----------
     suspend fun resumenGestion() = api.resumenGestion()
     suspend fun trabajosGestion(filtro: String) = api.trabajosGestion(filtro)
+
+    // ---------- FH-006 / P6-D3-4 ----------
+    suspend fun historialGestion(localId: Long) = api.historialGestion(localId)
+    suspend fun historialInquilino(localId: Long) = api.historialInquilino(localId)
 }

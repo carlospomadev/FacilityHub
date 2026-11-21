@@ -28,6 +28,7 @@ fun ObligacionesInquilinoScreen(
     flujo: FlujoViewModel,
     onObligacion: (ObligacionInquilinoDto) -> Unit,
     onSolicitudes: () -> Unit,
+    onHistorial: (Long, String) -> Unit,
     onBack: () -> Unit
 ) {
     LaunchedEffect(Unit) { flujo.limpiarMensajes(); flujo.cargarObligacionesInquilino() }
@@ -37,6 +38,12 @@ fun ObligacionesInquilinoScreen(
     ScreenScaffold(title = "Mis obligaciones", subtitle = "Inquilino", onAction = onBack, scrollable = true) {
         MensajesFlujo(flujo)
         TextButton(onClick = onSolicitudes) { Text("Mis solicitudes de proveedor") }
+        // FH-006 / P6-D3-4: historial de cada local con ocupacion vigente (el backend vuelve a comprobar el acceso).
+        flujo.obligacionesInquilino.distinctBy { it.localId }.forEach { o ->
+            OutlinedButton(onClick = { onHistorial(o.localId, o.local) }, modifier = Modifier.fillMaxWidth()) {
+                Text("Historial del local ${o.local}")
+            }
+        }
         if (!flujo.loading && flujo.obligacionesInquilino.isEmpty() && flujo.error == null) {
             Text("No tienes obligaciones en locales con ocupación vigente.")
         }
@@ -127,12 +134,7 @@ fun MantenimientosInquilinoScreen(
     LaunchedEffect(obligacionId) { flujo.limpiarMensajes(); flujo.cargarMantenimientosInquilino(obligacionId) }
     var fechaDe by remember { mutableStateOf<MantenimientoInquilinoDetalleDto?>(null) }
     var asignarDe by remember { mutableStateOf<MantenimientoInquilinoDetalleDto?>(null) }
-    var aDescargar by remember { mutableStateOf<CertificadoInquilinoDto?>(null) }
-    val guardar = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri: Uri? ->
-        val c = aDescargar
-        aDescargar = null
-        if (uri != null && c != null) flujo.descargarDocumento(c.id, uri)
-    }
+    val descargar = rememberDescargaDocumento(flujo)
 
     ScreenScaffold(title = "Mantenimientos", subtitle = titulo, onAction = onBack, scrollable = true) {
         MensajesFlujo(flujo)
@@ -145,17 +147,8 @@ fun MantenimientosInquilinoScreen(
                     m.descripcion?.let { Text(it) }
                     m.fechaPrevistaInquilino?.let { Text("Fecha prevista: $it") }
                     Text("Proveedor asignado: ${m.proveedorAsignado ?: "sin asignar"}")
-                    val c = m.cumplimiento
-                    if (c != null) {
-                        Text("Cumplimiento aprobado: ${c.fechaEjecucion.orEmpty()} · ${etiquetaResultado(c.resultado)}", color = MaterialTheme.colorScheme.primary)
-                        if (c.certificados.isNullOrEmpty()) Text("Sin certificados compartidos.", style = MaterialTheme.typography.bodySmall)
-                        // Solo llegan certificados APROBADOS y COMPARTIDOS de tu ocupacion; la descarga vuelve a comprobarlo.
-                        c.certificados.orEmpty().forEach { cert ->
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(cert.nombre, modifier = Modifier.weight(1f))
-                                TextButton(onClick = { aDescargar = cert; guardar.launch(cert.nombre) }, enabled = !flujo.loading) { Text("Descargar") }
-                            }
-                        }
+                    m.cumplimiento?.let { c ->
+                        CumplimientoCertificados(c, enabled = !flujo.loading) { cert -> descargar(cert.id, cert.nombre) }
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         if (ACCION_FIJAR_FECHA_PREVISTA in acciones) TextButton(onClick = { flujo.limpiarMensajes(); fechaDe = m }) { Text("Fecha prevista") }
@@ -298,5 +291,33 @@ fun SolicitudesGestionScreen(flujo: FlujoViewModel, esAdmin: Boolean, onBack: ()
 fun SinPermisosScreen(onLogout: () -> Unit) {
     ScreenScaffold(title = "Sin acceso", subtitle = "Rol no reconocido", onAction = onLogout, actionLabel = "Salir") {
         Text("Tu usuario no tiene un rol con acceso a la aplicación. Contacta con el administrador.")
+    }
+}
+
+// FH-006 / P6-D3-4: componentes comunes de certificados (Mantenimientos del inquilino e historial del local).
+
+// Guarda un documento elegido por el usuario. La autorizacion la vuelve a comprobar el backend en la descarga
+// (GET /api/documentos/{id}/archivo); un 403/404 llega como error de FlujoViewModel.
+@Composable
+internal fun rememberDescargaDocumento(flujo: FlujoViewModel): (Long, String) -> Unit {
+    var pendiente by remember { mutableStateOf<Long?>(null) }
+    val guardar = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri: Uri? ->
+        val id = pendiente
+        pendiente = null
+        if (uri != null && id != null) flujo.descargarDocumento(id, uri)
+    }
+    return { id, nombre -> pendiente = id; guardar.launch(nombre) }
+}
+
+// Cumplimiento aprobado y sus certificados. Solo llegan certificados VALIDO + COMPARTIDO de la ocupacion del inquilino.
+@Composable
+internal fun CumplimientoCertificados(c: CumplimientoInquilinoDto, enabled: Boolean, onDescargar: (CertificadoInquilinoDto) -> Unit) {
+    Text("Cumplimiento aprobado: ${c.fechaEjecucion.orEmpty()} · ${etiquetaResultado(c.resultado)}", color = MaterialTheme.colorScheme.primary)
+    if (c.certificados.isNullOrEmpty()) Text("Sin certificados compartidos.", style = MaterialTheme.typography.bodySmall)
+    c.certificados.orEmpty().forEach { cert ->
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(cert.nombre, modifier = Modifier.weight(1f))
+            TextButton(onClick = { onDescargar(cert) }, enabled = enabled) { Text("Descargar") }
+        }
     }
 }
