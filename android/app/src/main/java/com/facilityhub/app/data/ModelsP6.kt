@@ -140,7 +140,9 @@ data class MantenimientoInquilinoDetalleDto(
     val proveedorAsignado: String?,
     val cumplimiento: CumplimientoInquilinoDto?,
     val version: Long,
-    val accionesPermitidas: List<String>?
+    val accionesPermitidas: List<String>?,
+    // FH-006 / P6-D3-6: registro P5 sin validacion (nunca acredita cumplimiento).
+    val historicoP5: Boolean = false
 )
 
 data class ProveedorBasicoDto(val id: Long, val razonSocial: String)

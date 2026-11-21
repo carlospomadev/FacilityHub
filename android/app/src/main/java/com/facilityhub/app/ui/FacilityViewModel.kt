@@ -147,6 +147,8 @@ class FacilityViewModel(application: Application) : AndroidViewModel(application
         tokenStore.clear(); loggedIn = false; userName = ""; role = ""
         centros = emptyList(); locales = emptyList(); obligaciones = emptyList(); mantenimientos = emptyList()
         documentos = emptyList(); trabajos = emptyList(); trabajo = null
+        // FH-006 / P6-D3-6: sin restos de la sesion anterior en el login (p. ej. un error de conexion previo a un 401).
+        inquilino = null; instalaciones = emptyList(); error = null
     }
 
     fun clearError() { error = null }

@@ -143,7 +143,12 @@ fun MantenimientosInquilinoScreen(
             val acciones = m.accionesPermitidas.orEmpty()
             Card(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
                 Column(modifier = Modifier.padding(12.dp)) {
-                    Text("${m.fechaProgramada} · ${m.estado}", fontWeight = FontWeight.Bold)
+                    Text("${m.fechaProgramada} · ${etiquetaEstadoInquilino(m.estado, m.historicoP5)}", fontWeight = FontWeight.Bold)
+                    // FH-006 / P6-D3-6: un registro P5 conserva su estado real, pero no acredita cumplimiento.
+                    if (m.historicoP5) {
+                        Text("Histórico P5 — sin validación: no acredita cumplimiento.", color = MaterialTheme.colorScheme.tertiary,
+                            style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
+                    }
                     m.descripcion?.let { Text(it) }
                     m.fechaPrevistaInquilino?.let { Text("Fecha prevista: $it") }
                     Text("Proveedor asignado: ${m.proveedorAsignado ?: "sin asignar"}")
@@ -320,4 +325,11 @@ internal fun CumplimientoCertificados(c: CumplimientoInquilinoDto, enabled: Bool
             TextButton(onClick = { onDescargar(cert) }, enabled = enabled) { Text("Descargar") }
         }
     }
+}
+
+// FH-006 / P6-D3-6: estado legible. FINALIZADO en P6 = ejecutado y enviado (pendiente de validar si no hay cumplimiento);
+// en un registro P5 es solo el estado historico, sin validacion.
+internal fun etiquetaEstadoInquilino(estado: String, historicoP5: Boolean) = when {
+    historicoP5 && estado == "FINALIZADO" -> "Finalizado (registro P5)"
+    else -> etiquetaEstado(estado) ?: estado
 }
