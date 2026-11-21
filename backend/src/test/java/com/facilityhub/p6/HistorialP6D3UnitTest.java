@@ -77,7 +77,10 @@ class HistorialP6D3UnitTest {
         Mantenimiento cerrado = mantenimiento(2L, true, LocalDate.of(2026, 10, 20), EstadoMantenimiento.PROGRAMADO);
         Mantenimiento p5 = mantenimiento(3L, false, LocalDate.of(2026, 3, 1), EstadoMantenimiento.FINALIZADO);
         Mantenimiento pendiente = mantenimiento(4L, true, LocalDate.of(2026, 11, 1), EstadoMantenimiento.FINALIZADO);
-        when(mantenimientoRepository.delLocal(LOCAL)).thenReturn(List.of(pendiente, cerrado, aprobado, p5));
+        // P6-D3-6: un P5 abierto (PROGRAMADO, fecha futura) es trabajo pendiente, no historial.
+        Mantenimiento p5Abierto = mantenimiento(5L, false, LocalDate.of(2027, 1, 15), EstadoMantenimiento.PROGRAMADO);
+        Mantenimiento p5Cancelado = mantenimiento(6L, false, LocalDate.of(2026, 2, 1), EstadoMantenimiento.CANCELADO);
+        when(mantenimientoRepository.delLocal(LOCAL)).thenReturn(List.of(p5Abierto, pendiente, cerrado, aprobado, p5, p5Cancelado));
         Intervencion iAprobada = intervencion(31L, aprobado, EstadoValidacion.APROBADO, LocalDate.of(2026, 10, 1));
         Intervencion iCerrada = intervencion(32L, cerrado, EstadoValidacion.CERRADO_SIN_CUMPLIMIENTO, LocalDate.of(2026, 10, 20));
         when(intervencionRepository.historialDeMantenimientos(anyCollection(), anyCollection())).thenReturn(List.of(iCerrada, iAprobada));
@@ -92,7 +95,10 @@ class HistorialP6D3UnitTest {
 
         // Mas reciente primero; el pendiente (sin intervencion cerrada) no es historial.
         assertThat(h).extracting(HistorialGestionDto::tipoRegistro)
-            .containsExactly(HistorialService.CERRADO_SIN_CUMPLIMIENTO, HistorialService.APROBADO, HistorialService.HISTORICO_P5);
+            .containsExactly(HistorialService.CERRADO_SIN_CUMPLIMIENTO, HistorialService.APROBADO, HistorialService.HISTORICO_P5,
+                HistorialService.HISTORICO_P5);
+        assertThat(h).extracting(HistorialGestionDto::mantenimientoId).containsExactly(2L, 1L, 3L, 6L).doesNotContain(5L);
+        assertThat(h.get(3).estadoMantenimiento()).isEqualTo("CANCELADO");
         HistorialGestionDto a = h.get(1);
         assertThat(a.intervencionId()).isEqualTo(31L);
         assertThat(a.estadoValidacion()).isEqualTo("APROBADO");
@@ -104,7 +110,7 @@ class HistorialP6D3UnitTest {
         assertThat(historico.estadoMantenimiento()).isEqualTo("FINALIZADO"); // estado real conservado
         assertThat(historico.documentos()).extracting(d -> d.id()).containsExactly(53L);
         assertThat(h.get(0).etiqueta()).isEqualTo("Cerrado sin cumplimiento");
-        assertThat(h).extracting(HistorialGestionDto::mantenimientoId).doesNotContain(4L);
+        assertThat(h).extracting(HistorialGestionDto::mantenimientoId).doesNotContain(4L, 5L);
     }
 
     @Test

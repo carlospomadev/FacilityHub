@@ -4,6 +4,7 @@ import com.facilityhub.api.dto.historial.HistorialGestionDto;
 import com.facilityhub.api.dto.historial.HistorialInquilinoDto;
 import com.facilityhub.api.dto.intervencion.DocumentoIntervencionDto;
 import com.facilityhub.domain.DocumentoMantenimiento;
+import com.facilityhub.domain.EstadoMantenimiento;
 import com.facilityhub.domain.EstadoValidacion;
 import com.facilityhub.domain.Intervencion;
 import com.facilityhub.domain.Mantenimiento;
@@ -24,12 +25,14 @@ import java.util.Comparator;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 // FH-006 / P6-D3-2: historial consolidado de un local (GET /api/locales/{id}/historial). Solo lectura.
 //  - Gestion (ADMIN, EXPLOTACION; alcance global D5): intervenciones APROBADO y CERRADO_SIN_CUMPLIMIENTO con todos sus
-//    documentos, y los mantenimientos historicos P5 (validacion_requerida = FALSE) como "Historico P5 - sin validacion",
-//    con su estado y fechas reales y sin presentarlos nunca como aprobados.
+//    documentos, y los mantenimientos historicos P5 cerrados (validacion_requerida = FALSE; FINALIZADO o CANCELADO) como
+//    "Historico P5 - sin validacion", con su estado y fechas reales y sin presentarlos nunca como aprobados.
+//    Orden: fecha de ejecucion de la intervencion, o realizacion del P5 (programada si se cancelo sin realizarse).
 //  - INQUILINO: solo intervenciones APROBADO de mantenimientos cubiertos por su ocupacion vigente del local
 //    (puedeAccederLocal + cubreMantenimiento, regla C8/D-8) y solo certificados VALIDO + COMPARTIDO. Sin P5, sin
 //    pendientes, sin cierres sin cumplimiento, sin observaciones internas ni documentos internos.
@@ -44,6 +47,9 @@ public class HistorialService {
     static final String ETIQUETA_APROBADO = "Cumplimiento aprobado";
     static final String ETIQUETA_CERRADO = "Cerrado sin cumplimiento";
     static final String ETIQUETA_P5 = "Histórico P5 — sin validación";
+    // FH-006 / P6-D3-6: solo es historial un P5 cerrado. Un P5 PROGRAMADO/PENDIENTE/EN_PROCESO es trabajo abierto
+    // (panel de gestion y mantenimientos de la obligacion), no historia.
+    static final Set<EstadoMantenimiento> P5_CERRADOS = EnumSet.of(EstadoMantenimiento.FINALIZADO, EstadoMantenimiento.CANCELADO);
 
     private final LocalComercialRepository localRepository;
     private final MantenimientoRepository mantenimientoRepository;
@@ -103,7 +109,7 @@ public class HistorialService {
                     gestionDto(aprobado ? APROBADO : CERRADO_SIN_CUMPLIMIENTO, aprobado ? ETIQUETA_APROBADO : ETIQUETA_CERRADO,
                         m, i, porIntervencion.getOrDefault(i.getId(), List.of()))));
             }
-            if (!m.isValidacionRequerida()) {
+            if (!m.isValidacionRequerida() && P5_CERRADOS.contains(m.getEstado())) {
                 entradas.add(new Entrada<>(m.fechaDelHecho(), gestionDto(HISTORICO_P5, ETIQUETA_P5, m, null,
                     sinIntervencion.getOrDefault(m.getId(), List.of()))));
             }

@@ -213,7 +213,7 @@ public class InquilinoService {
         }
         return new MantenimientoInquilinoDetalleDto(m.getId(), m.getObligacion().getId(), m.getFechaProgramada(),
             m.getFechaPrevistaInquilino(), m.getFechaRealizacion(), m.getEstado().name(), m.getDescripcion(),
-            proveedorAsignado, cumplimiento, m.getVersion(), acciones);
+            proveedorAsignado, cumplimiento, m.getVersion(), acciones, !m.isValidacionRequerida());
     }
 
     private CumplimientoInquilinoDto cumplimiento(Intervencion i) {
