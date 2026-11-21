@@ -50,4 +50,15 @@ public interface MantenimientoRepository extends JpaRepository<Mantenimiento, Lo
         order by m.fechaProgramada, m.id
         """)
     List<Mantenimiento> abiertosHasta(@Param("hasta") LocalDate hasta);
+
+    // FH-006 / P6-D3-2: mantenimientos de las obligaciones de un local (historial), con tipo e instalacion.
+    @Query("""
+        select m from Mantenimiento m
+          join fetch m.obligacion o
+          join fetch o.tipoMantenimiento
+          left join fetch o.instalacion
+        where o.local.id = :localId
+        order by m.fechaProgramada desc, m.id desc
+        """)
+    List<Mantenimiento> delLocal(@Param("localId") Long localId);
 }

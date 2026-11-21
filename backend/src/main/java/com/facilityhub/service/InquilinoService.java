@@ -8,7 +8,7 @@ import com.facilityhub.api.dto.inquilino.ObligacionInquilinoDto;
 import com.facilityhub.api.dto.inquilino.ProveedorBasicoDto;
 import com.facilityhub.api.dto.proveedor.AsignacionDto;
 import com.facilityhub.domain.AsignacionMantenimiento;
-import com.facilityhub.domain.EstadoRevisionDocumento;
+import com.facilityhub.domain.DocumentoMantenimiento;
 import com.facilityhub.domain.EstadoValidacion;
 import com.facilityhub.domain.Intervencion;
 import com.facilityhub.domain.Mantenimiento;
@@ -17,7 +17,6 @@ import com.facilityhub.domain.ObligacionProveedor;
 import com.facilityhub.domain.OcupacionLocal;
 import com.facilityhub.domain.ResponsableObligacion;
 import com.facilityhub.domain.Usuario;
-import com.facilityhub.domain.VisibilidadDocumento;
 import com.facilityhub.repository.AsignacionMantenimientoRepository;
 import com.facilityhub.repository.DocumentoMantenimientoRepository;
 import com.facilityhub.repository.IntervencionRepository;
@@ -218,9 +217,14 @@ public class InquilinoService {
     }
 
     private CumplimientoInquilinoDto cumplimiento(Intervencion i) {
-        List<CertificadoInquilinoDto> certificados = documentoRepository.findByIntervencionIdOrderByFechaSubidaAscIdAsc(i.getId())
-            .stream()
-            .filter(d -> d.getVisibilidad() == VisibilidadDocumento.COMPARTIDO && d.getEstadoRevision() == EstadoRevisionDocumento.VALIDO)
+        return cumplimiento(i, documentoRepository.findByIntervencionIdOrderByFechaSubidaAscIdAsc(i.getId()));
+    }
+
+    // FH-006 / P6-D3-2: cumplimiento visible para el inquilino (compartido con el historial del local). Solo
+    // certificados que cumplen DocumentoAutorizacionService.visibleParaInquilino (VALIDO + COMPARTIDO).
+    public static CumplimientoInquilinoDto cumplimiento(Intervencion i, List<DocumentoMantenimiento> documentosDeLaIntervencion) {
+        List<CertificadoInquilinoDto> certificados = documentosDeLaIntervencion.stream()
+            .filter(DocumentoAutorizacionService::visibleParaInquilino)
             .map(d -> new CertificadoInquilinoDto(d.getId(), d.getNombreOriginal(), d.getFechaSubida()))
             .toList();
         return new CumplimientoInquilinoDto(i.getId(), i.getFechaEjecucion(), i.getResultado().name(), certificados);

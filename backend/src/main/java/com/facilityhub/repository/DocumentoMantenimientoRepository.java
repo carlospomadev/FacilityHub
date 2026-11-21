@@ -17,4 +17,9 @@ public interface DocumentoMantenimientoRepository extends JpaRepository<Document
     List<DocumentoMantenimiento> findByIntervencionIdOrderByFechaSubidaAscIdAsc(Long intervencionId);
 
     long countByIntervencionId(Long intervencionId);
+
+    // FH-006 / P6-D3-2: documentos de un lote de mantenimientos o intervenciones (historial, sin N+1).
+    List<DocumentoMantenimiento> findByMantenimientoIdInOrderByFechaSubidaAscIdAsc(java.util.Collection<Long> mantenimientoIds);
+
+    List<DocumentoMantenimiento> findByIntervencionIdInOrderByFechaSubidaAscIdAsc(java.util.Collection<Long> intervencionIds);
 }

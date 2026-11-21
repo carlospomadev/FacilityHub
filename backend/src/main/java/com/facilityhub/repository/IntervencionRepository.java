@@ -43,6 +43,16 @@ public interface IntervencionRepository extends JpaRepository<Intervencion, Long
         """)
     List<Intervencion> bandeja(@Param("estado") EstadoValidacion estado);
 
+    // FH-006 / P6-D3-2: intervenciones cerradas (historial) de un lote de mantenimientos, con su proveedor.
+    @Query("""
+        select i from Intervencion i
+          join fetch i.proveedor
+        where i.mantenimiento.id in :mantenimientoIds and i.estadoValidacion in :estados
+        order by i.fechaEjecucion desc, i.id desc
+        """)
+    List<Intervencion> historialDeMantenimientos(@Param("mantenimientoIds") Collection<Long> mantenimientoIds,
+                                                 @Param("estados") Collection<EstadoValidacion> estados);
+
     // Limite inferior de una nueva ejecucion: la ultima ejecucion aprobada de la obligacion (evita reutilizar una
     // ejecucion ya acreditada).
     @Query("""
