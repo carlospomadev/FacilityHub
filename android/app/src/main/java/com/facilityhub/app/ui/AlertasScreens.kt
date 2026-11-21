@@ -17,8 +17,14 @@ internal fun etiquetaAlerta(tipo: String) = when (tipo) {
     "EVIDENCIAS_PRESENTADAS" -> "Intervención para validar"
     "CORRECCION_SOLICITADA" -> "Corrección solicitada"
     "APROBADO" -> "Mantenimiento aprobado"
+    // FH-006 / P6-D2: recordatorios de vencimiento.
+    "VENCIMIENTO_PROXIMO" -> "Próximo a vencer"
+    "MANTENIMIENTO_VENCIDO" -> "Mantenimiento vencido"
+    "VALIDACION_PENDIENTE_VENCIDA" -> "Validación pendiente (vencido)"
     else -> "Aviso"
 }
+
+private val TIPOS_VENCIMIENTO = setOf("VENCIMIENTO_PROXIMO", "MANTENIMIENTO_VENCIDO")
 
 // Destinos compatibles por rol. Una alerta NO concede acceso: la pantalla de destino vuelve a pedir el recurso al
 // backend, que comprueba permisos (403/404 se muestran como falta de acceso).
@@ -27,6 +33,7 @@ sealed interface DestinoAlerta {
     data class Intervencion(val intervencionId: Long) : DestinoAlerta
     data object Declaraciones : DestinoAlerta
     data class MantenimientosInquilino(val obligacionId: Long) : DestinoAlerta
+    data class MantenimientoGestion(val mantenimientoId: Long) : DestinoAlerta
 }
 
 internal fun destinoAlerta(a: AlertaDto, rol: String): DestinoAlerta? = when {
@@ -36,6 +43,14 @@ internal fun destinoAlerta(a: AlertaDto, rol: String): DestinoAlerta? = when {
     rol in ROLES_GESTION && a.tipo == "EVIDENCIAS_PRESENTADAS" && a.intervencionId != null -> DestinoAlerta.Intervencion(a.intervencionId)
     rol in ROLES_GESTION && a.tipo == "PROVEEDOR_DECLARADO" -> DestinoAlerta.Declaraciones
     rol == ROL_INQUILINO && a.tipo == "APROBADO" && a.obligacionId != null -> DestinoAlerta.MantenimientosInquilino(a.obligacionId)
+    // P6-D2: recordatorios de vencimiento.
+    rol == "PROVEEDOR" && a.tipo in TIPOS_VENCIMIENTO && a.mantenimientoId != null -> DestinoAlerta.Trabajo(a.mantenimientoId)
+    rol in ROLES_GESTION && a.tipo in TIPOS_VENCIMIENTO && a.mantenimientoId != null ->
+        DestinoAlerta.MantenimientoGestion(a.mantenimientoId)
+    rol in ROLES_GESTION && a.tipo == "VALIDACION_PENDIENTE_VENCIDA" && a.intervencionId != null ->
+        DestinoAlerta.Intervencion(a.intervencionId)
+    rol == ROL_INQUILINO && (a.tipo in TIPOS_VENCIMIENTO || a.tipo == "VALIDACION_PENDIENTE_VENCIDA") && a.obligacionId != null ->
+        DestinoAlerta.MantenimientosInquilino(a.obligacionId)
     else -> null
 }
 

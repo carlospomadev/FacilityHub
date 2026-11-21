@@ -146,6 +146,8 @@ fun FacilityHubApp(
                         DestinoAlerta.Declaraciones -> nav.navigate("declaraciones")
                         is DestinoAlerta.MantenimientosInquilino ->
                             nav.navigate("inquilino-mant/${destino.obligacionId}/${enc("Mantenimientos")}")
+                        is DestinoAlerta.MantenimientoGestion ->
+                            nav.navigate("mant-gestion/${destino.mantenimientoId}/${enc("Mantenimiento")}")
                     }
                 },
                 onSesionCaducada = salir

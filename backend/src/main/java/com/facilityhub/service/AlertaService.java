@@ -84,6 +84,13 @@ public class AlertaService {
             "Mantenimiento aprobado: " + descriptor(m));
     }
 
+    // 6. FH-006 / P6-D2: recordatorio de vencimiento (lo emite el sistema: sin autor). Idempotente por evento_ref.
+    @Transactional(propagation = Propagation.MANDATORY)
+    public int recordatorio(TipoAlerta tipo, String eventoRef, List<Usuario> destinatarios, Mantenimiento m,
+                            Long intervencionId, String mensaje) {
+        return emitir(tipo, eventoRef, destinatarios, null, m.getId(), m.getObligacion().getId(), intervencionId, mensaje);
+    }
+
     // Inquilino que debe conocer la aprobacion: el de la ocupacion vinculada al mantenimiento (si sigue vigente) o, sin
     // vinculo, el de la ocupacion vigente que cubre el hecho (misma regla de historial que P6-C2). Zona comun: ninguno.
     List<Usuario> inquilinosDelMantenimiento(Mantenimiento m) {

@@ -25,6 +25,12 @@ public interface AlertaRepository extends JpaRepository<Alerta, Long> {
                            @Param("obligacion") Long obligacion, @Param("intervencion") Long intervencion,
                            @Param("mensaje") String mensaje, @Param("ahora") LocalDateTime ahora);
 
+    // FH-006 / P6-D2: impide dos ejecuciones de recordatorios a la vez (se libera al terminar la transaccion).
+    @Query(value = "SELECT pg_try_advisory_xact_lock(:clave)", nativeQuery = true)
+    boolean bloquearEjecucion(@Param("clave") long clave);
+
+    boolean existsByDestinatarioIdAndTipoAndEventoRef(Long destinatarioId, com.facilityhub.domain.TipoAlerta tipo, String eventoRef);
+
     List<Alerta> findTop100ByDestinatarioIdOrderByCreatedAtDescIdDesc(Long destinatarioId);
 
     List<Alerta> findTop100ByDestinatarioIdAndLeidaAtIsNullOrderByCreatedAtDescIdDesc(Long destinatarioId);
