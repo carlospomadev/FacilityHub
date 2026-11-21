@@ -1,121 +1,111 @@
 ﻿# FacilityHub
 
-FacilityHub es una aplicación desarrollada como Proyecto Intermodular del ciclo de Desarrollo de Aplicaciones Multiplataforma (DAM).
+FacilityHub es una aplicación para controlar el **mantenimiento preventivo y el cumplimiento documental** de los locales de centros comerciales. Se ha desarrollado como Proyecto Intermodular del ciclo de Desarrollo de Aplicaciones Multiplataforma (DAM), a partir de una necesidad real de un departamento de Explotación.
 
-El proyecto nace de una necesidad real observada en un departamento de Explotación encargado de gestionar los mantenimientos y el cumplimiento documental de distintos centros comerciales.
+El sistema registra qué mantenimiento debe hacerse en cada local o zona común, quién es responsable, qué empresa lo ejecuta, qué evidencias y certificados se aportan, y quién valida que el mantenimiento se ha cumplido.
 
-## Objetivo
+## Componentes
 
-Centralizar la gestión de:
+| Componente | Tecnología | Carpeta |
+|---|---|---|
+| API REST | Java 21, Spring Boot 4.1.1, Spring Security (JWT), Spring Data JPA, Flyway, Maven | [`backend/`](backend/README.md) |
+| Base de datos | PostgreSQL 18, esquema `facilityhub`, migraciones Flyway V1–V9 | `backend/src/main/resources/db/migration` |
+| Aplicación móvil | Android, Kotlin, Jetpack Compose, Material 3, MVVM, Retrofit | [`android/`](android/README.md) |
+| Scripts | Validación automática de la API (PowerShell) | `scripts/` |
 
-- Centros comerciales.
-- Locales.
-- Inquilinos.
-- Instalaciones técnicas.
-- Obligaciones de mantenimiento.
-- Planificación y seguimiento de mantenimientos.
-- Documentación y certificados.
-- Validación documental.
-- Próximas fechas de mantenimiento.
+```
+App Android (Compose, MVVM) --REST + JWT--> Backend Spring Boot --JPA/Flyway--> PostgreSQL
+                                                   |
+                                                   +-- almacenamiento de documentos en disco
+```
 
-## Tecnologías
+## Roles
 
-### Backend
-- Java 21
-- Spring Boot
-- Spring Security
-- JWT
-- Spring Data JPA
-- Flyway
-- Maven
+| Rol | Uso principal |
+|---|---|
+| `ADMIN` | Administración: alta de proveedores y técnicos, solicitudes de proveedor, ejecución manual de recordatorios y todo lo de gestión |
+| `EXPLOTACION` | Gestión: panel de trabajos, asignación de proveedores, registro y **validación** de intervenciones, documentos e historial |
+| `INQUILINO` | Sus obligaciones (según su ocupación vigente): proveedor declarado, fecha prevista, solicitudes, historial y certificados compartidos |
+| `PROVEEDOR` | Técnico de una empresa mantenedora: «Mis trabajos» asignados, registro de intervenciones, evidencias y envío a validación |
 
-### Base de datos
-- PostgreSQL
+Los permisos se comprueban siempre en el backend. El rol se vuelve a leer de la base de datos y lo ajeno responde 404 uniforme. La app solo muestra las acciones que el backend devuelve en `accionesPermitidas`.
 
-### Aplicación móvil
-- Android
-- Kotlin
+## Funcionalidades
 
-### Control de versiones
-- Git
-- GitHub
+- **Autenticación JWT y control de acceso** por rol y por recurso.
+- **Consulta de centros, locales, inquilino actual e instalaciones**. Estos datos maestros se cargan mediante migraciones: no hay pantallas de alta ni de edición. Por eso los requisitos RF-03, RF-04, RF-05, RF-07, RF-08 y RF-09 del informe de avance, que piden registrar o gestionar estos datos, están **parcialmente implementados**: se consultan, pero no se dan de alta ni se editan desde la aplicación.
+- **Obligaciones de mantenimiento:**
+  - periodicidad y próxima fecha;
+  - responsable contractual (NHOOD o INQUILINO);
+  - obligaciones de local y de **zona común**.
+- **Mantenimientos programados:**
+  - asignación de proveedor y técnico;
+  - fecha prevista indicada por el inquilino.
+- **Intervenciones con validación:**
+  - circuito borrador → envío → **aprobación**, corrección o cierre sin cumplimiento;
+  - **recálculo automático de la próxima fecha** al aprobar;
+  - un mantenimiento enviado no cuenta como cumplido hasta que se aprueba.
+- **Documentación:**
+  - evidencias y certificados;
+  - revisión (pendiente, válido, rechazado o caducado);
+  - visibilidad interna o compartida;
+  - descarga controlada.
+- **Proveedores:**
+  - alta de empresas y técnicos;
+  - el inquilino declara su proveedor y Explotación lo revisa;
+  - solicitudes de alta de proveedor nuevo.
+- **Alertas internas** («Mis notificaciones») y **recordatorios de vencimiento**. Los recordatorios están desactivados por defecto y solo se ejecutan manualmente desde ADMIN.
+- **Panel de Explotación:** vencidos, próximos, pendientes de validación, en corrección, sin asignar, declaraciones y solicitudes.
+- **Historial del local:**
+  - gestión ve aprobados, cierres sin cumplimiento e históricos P5 («Histórico P5 — sin validación»);
+  - el inquilino ve solo los cumplimientos aprobados de su ocupación, con certificados compartidos.
 
-## Arquitectura
+## Puesta en marcha rápida
 
-Android App
-    |
-    | REST API / JWT
-    v
-Spring Boot Backend
-    |
-    | JPA / Hibernate
-    v
-PostgreSQL
+1. **Base de datos:** PostgreSQL 18 con una base y un usuario para la aplicación (detalle en [`backend/README.md`](backend/README.md#base-de-datos)).
+2. **Backend:** definir las variables de entorno y ejecutar `mvn spring-boot:run` en `backend/`. Flyway crea el esquema y los datos de demostración (V1–V9).
+3. **Comprobación:** `http://localhost:8080/actuator/health` → `{"status":"UP"}`.
+4. **App:** abrir `android/` en Android Studio y ejecutarla en un emulador. El emulador accede al backend en `http://10.0.2.2:8080/`.
+5. **Validación automática (opcional, solo en una base desechable):** arrancar un backend aparte con `SERVER_PORT=18080` contra una base desechable y ejecutar `scripts\validar-api.ps1 -ConfirmarEntornoDesechable`. El script rechaza cualquier destino que no sea `localhost`/`127.0.0.1` en el puerto 18080. Ver [`docs/PLAN_PRUEBAS.md`](docs/PLAN_PRUEBAS.md).
 
-## Funcionalidades implementadas
+### Estado de validación de las vías de arranque
+| Vía | Estado |
+|---|---|
+| **Arranque nativo** (PostgreSQL 18 + backend con variables de entorno + emulador Android) | **Validado** desde cero en una base desechable: Flyway V1–V9, health check, login, flujo completo de la API y conexión Android ↔ API (FH-008A). El backend se lanzó desde las clases compiladas (`mvn compile` + `java -cp`) |
+| `mvn spring-boot:run` / `mvn package` | **No validado en el equipo de desarrollo**: el plugin de Spring Boot no estaba en la caché offline de Maven. En un equipo con acceso a internet, Maven lo descarga en la primera ejecución |
+| **Docker Compose** (`backend/docker-compose.yml`) | **Solo revisión estática, sin ejecución** (Docker no estaba instalado). Ver las advertencias en `backend/README.md` |
 
-- Autenticación mediante JWT.
-- Gestión de roles.
-- Consulta de centros y locales.
-- Consulta del inquilino actual.
-- Gestión de instalaciones.
-- Gestión de obligaciones de mantenimiento.
-- Creación de mantenimientos.
-- Cambio de estado de mantenimientos.
-- Finalización de mantenimientos.
-- Cálculo automático de la próxima fecha de mantenimiento.
-- Subida de documentación.
-- Listado de documentos.
-- Revisión y validación documental.
-- Descarga de documentos.
+### Configuración
+Toda la información sensible va en variables de entorno, nunca en el repositorio. La plantilla es `.env.example`.
 
-## Estado del proyecto
+| Variable | Uso |
+|---|---|
+| `DB_URL`, `DB_USERNAME`, `DB_PASSWORD` | Conexión JDBC a PostgreSQL |
+| `JWT_SECRET` | Clave de firma de los tokens (**al menos 32 bytes**) |
+| `JWT_EXPIRATION_MINUTES` | Caducidad del token (480 por defecto) |
+| `SERVER_PORT` | Puerto HTTP (8080 por defecto) |
+| `FACILITYHUB_STORAGE_ROOT` | Carpeta de los documentos subidos |
+| `FACILITYHUB_RECORDATORIOS_ENABLED` | Tarea programada de recordatorios (`false` por defecto) |
 
-Avance aproximado: 50 %
+**Usuarios de demostración** (creados por la migración V3): `admin@facilityhub.local`, `explotacion@facilityhub.local` e `inquilino@facilityhub.local`. Las contraseñas no se publican en el repositorio: las facilita el responsable del proyecto. Los usuarios PROVEEDOR los da de alta un ADMIN desde la API.
 
-El backend y la base de datos se encuentran integrados y validados mediante pruebas funcionales.
-
-La siguiente fase se centra principalmente en:
-
-- Validación e integración de la aplicación Android.
-- Mejora de la interfaz móvil.
-- Dashboard.
-- Notificaciones.
-- Pruebas adicionales.
-- Documentación final.
-
-## Configuración local
-
-El proyecto utiliza variables de entorno para información sensible.
-
-Consultar:
-
-`.env.example`
-
-Ejemplo de variables:
-
-- DB_URL
-- DB_USERNAME
-- DB_PASSWORD
-- JWT_SECRET
-- JWT_EXPIRATION_MINUTES
-- SERVER_PORT
-- FACILITYHUB_STORAGE_ROOT
+## Pruebas y validación
+- `mvn test` en `backend/`: **147 pruebas unitarias** (sin base de datos).
+- **Pruebas de integración (`*IT`):** se ejecutan contra una base de pruebas dedicada con una barrera de seguridad. Ver [`backend/README.md`](backend/README.md#pruebas).
+- **`scripts/validar-api.ps1`:** recorrido completo de la API con el circuito vigente (mantenimiento → intervención → envío → validación).
+- **Sin CI configurada:** la validación de cada fase se documenta con pruebas locales e integradas.
 
 ## Estructura
 
+```
 FacilityHub/
-├── backend/
-├── android/
-├── docs/
-│   └── evidencias/
-├── scripts/
-├── README.md
-├── CHANGELOG.md
-├── .env.example
-└── .gitignore
+├── backend/        API Spring Boot, migraciones Flyway, Dockerfile y docker-compose
+├── android/        Aplicación Android (Kotlin + Compose)
+├── docs/           Plan de pruebas e informe de avance
+├── scripts/        Validación automática de la API
+├── CHANGELOG.md    Bitácora de desarrollo
+└── .env.example    Plantilla de variables de entorno (sin valores reales)
+```
 
 ## Proyecto académico
-
-Proyecto Final / Proyecto Intermodular  
-Desarrollo de Aplicaciones Multiplataforma (DAM)
+Proyecto Intermodular — Desarrollo de Aplicaciones Multiplataforma (DAM). La evolución por fases se detalla en [`CHANGELOG.md`](CHANGELOG.md).
