@@ -20,8 +20,9 @@ import java.util.*;
 // desactivada por defecto o llamada manual de ADMIN); nunca al arrancar. Idempotente: cada aviso lleva un evento_ref
 // determinista por periodo y la insercion ignora duplicados. Un bloqueo consultivo evita ejecuciones simultaneas.
 //
-// Reglas (hoy = reloj Europe/Madrid). Candidato: obligacion ACTIVA, mantenimiento ni CANCELADO ni FINALIZADO, sin
-// intervencion APROBADO y como maximo `antiguedad-maxima-dias` vencido.
+// Reglas (hoy = reloj Europe/Madrid). Candidato: obligacion ACTIVA, mantenimiento no CANCELADO (FINALIZADO solo con
+// intervencion en PENDIENTE_VALIDACION: "enviado" no es "cumplido"), sin intervencion APROBADO y como maximo
+// `antiguedad-maxima-dias` vencido.
 //  - VENCIMIENTO_PROXIMO: hoy <= fecha <= hoy + preaviso, salvo intervencion ya presentada (PENDIENTE_VALIDACION).
 //    Un aviso por mantenimiento y fecha programada.
 //  - MANTENIMIENTO_VENCIDO: fecha < hoy sin intervencion en PENDIENTE_VALIDACION (sin intervencion, BORRADOR,

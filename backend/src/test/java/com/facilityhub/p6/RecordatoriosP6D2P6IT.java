@@ -145,6 +145,41 @@ class RecordatoriosP6D2P6IT extends P4IntegracionBase {
     }
 
     @Test
+    void p6d2_it_06_vencidoConIntervencionEnviadaAvisaDeValidacionPendiente() throws Exception {
+        Long proveedor = insertarProveedor();
+        Long tecnicoId = insertarTecnico(proveedor);
+        String tecnico = email(tecnicoId);
+        Long mantenimiento = nuevoMantenimiento(obligacion("NHOOD"), HOY.minusDays(4));
+        sincronizar();
+        mvc.perform(json(put("/api/mantenimientos/{id}/asignacion", mantenimiento), EMAIL_EXPLOTACION, "{\"proveedorId\":" + proveedor + "}"))
+            .andExpect(status().isOk());
+        String alta = mvc.perform(json(post("/api/mantenimientos/{id}/intervenciones", mantenimiento), tecnico,
+                "{\"fechaEjecucion\":\"" + HOY.minusDays(4) + "\",\"actuaciones\":\"P4- revision\",\"resultado\":\"CONFORME\"}"))
+            .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+        Long intervencion = Long.valueOf(alta.replaceAll("^\\{\"id\":(\\d+).*", "$1"));
+        jdbc.update("""
+            INSERT INTO facilityhub.documentos_mantenimiento (mantenimiento_id, nombre_original, ruta_archivo, estado_revision,
+              visibilidad, intervencion_id, categoria) VALUES (?, 'P4-sintetico.pdf', 'P4-sin-archivo', 'PENDIENTE', 'INTERNO', ?, 'EVIDENCIA')""",
+            mantenimiento, intervencion);
+        sincronizar();
+        Long version = jdbc.queryForObject("SELECT version FROM facilityhub.intervenciones WHERE id = ?", Long.class, intervencion);
+        mvc.perform(json(post("/api/intervenciones/{id}/envio", intervencion), tecnico, "{\"version\":" + version + "}")).andExpect(status().isOk());
+        sincronizar();
+        // Enviado = FINALIZADO operativo, pero no cumplido: debe seguir siendo candidato.
+        assertThat(jdbc.queryForObject("SELECT estado FROM facilityhub.mantenimientos WHERE id = ?", String.class, mantenimiento)).isEqualTo("FINALIZADO");
+
+        ejecutarReal();
+        Long explotacion = idUsuario(EMAIL_EXPLOTACION);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM facilityhub.alertas WHERE destinatario_usuario_id = ? AND tipo = 'VALIDACION_PENDIENTE_VENCIDA' "
+            + "AND mantenimiento_id = ? AND intervencion_id = ?", Integer.class, explotacion, mantenimiento, intervencion)).isEqualTo(1);
+        assertThat(alertasDe(tecnicoId, mantenimiento)).isZero(); // depende de Explotacion, no del proveedor
+        assertThat(alertas(explotacion, "MANTENIMIENTO_VENCIDO", mantenimiento)).isZero();
+        int total = alertasDe(null, mantenimiento);
+        ejecutarReal();
+        assertThat(alertasDe(null, mantenimiento)).isEqualTo(total);
+    }
+
+    @Test
     void p6d2_it_05_tareaProgramadaDesactivadaPorDefecto() {
         assertThat(contexto.getBeanNamesForType(RecordatoriosProgramados.class)).isEmpty();
         assertThat(contexto.getEnvironment().getProperty("facilityhub.recordatorios.enabled")).isEqualTo("false");
