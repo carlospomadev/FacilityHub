@@ -1,49 +1,127 @@
-# FacilityHub Backend - Hito 5: API funcional del nucleo
+# FacilityHub — Backend
 
-Esta version reúne el modelo de datos, autenticacion/roles y el primer recorrido funcional completo del backend.
+API REST de FacilityHub. Usa Java 21, Spring Boot 4.1.1 (Web, Security con OAuth2 Resource Server y JWT, Data JPA, Validation y Actuator), PostgreSQL 18 y Flyway.
 
-## Recorrido soportado
+Paquetes en `com.facilityhub`:
 
-`Login -> Centro -> Local -> Inquilino -> Instalaciones -> Obligaciones -> Mantenimientos -> Documentos`
+| Paquete | Contenido |
+|---|---|
+| `api` | Controladores REST y DTO |
+| `service` | Reglas de negocio y autorización por recurso |
+| `repository` | Spring Data JPA |
+| `domain` | Entidades |
+| `security` | JWT y `SecurityConfig` |
+| `config` | Reloj Europe/Madrid y recordatorios programados |
 
-## Funciones principales
+## Requisitos previos
+- JDK 21.
+- Maven 3.9 o superior. No hay `mvnw` versionado. La primera ejecución descarga dependencias y plugins.
+- PostgreSQL 18 (local o Docker).
 
-- Login JWT y control por roles.
-- Consulta de centros y locales.
-- Consulta del inquilino activo de un local.
-- Consulta de instalaciones de un local.
-- Consulta de obligaciones y periodicidad.
-- Creacion y cambio de estado de mantenimientos.
-- Calculo de la siguiente fecha al finalizar un mantenimiento.
-- Subida de certificados/documentos.
-- Listado y descarga de documentos.
-- Revision documental: PENDIENTE, VALIDO, RECHAZADO o CADUCADO.
+## Base de datos
+Hay que crear un usuario y una base vacía; el esquema y los datos los crea Flyway al arrancar:
+
+```sql
+CREATE ROLE facilityhub LOGIN PASSWORD '<elige una contraseña>';
+CREATE DATABASE facilityhub OWNER facilityhub;
+```
+
+Migraciones (`src/main/resources/db/migration`):
+
+| Versión | Contenido |
+|---|---|
+| V1 | Modelo inicial |
+| V2 | Datos de demostración: 1 centro, 2 locales, instalaciones y obligaciones |
+| V3 | Usuarios demo |
+| V4 | Visibilidad de documentos |
+| V5 | Proveedores, responsabilidad y asignaciones |
+| V6 | Intervenciones, validación y auditoría |
+| V7 | Inquilino, declaración y solicitudes de proveedor |
+| V8 | Alertas |
+| V9 | Recordatorios de vencimiento |
+
+Hibernate trabaja con `ddl-auto: validate`: no modifica el esquema. Los mantenimientos anteriores a la fase P6 quedan marcados como `validacion_requerida = FALSE` («Histórico P5 — sin validación»).
+
+## Configuración
+Toda la configuración se toma de variables de entorno (ver `src/main/resources/application.yml` y la tabla del [README principal](../README.md#configuración)). Mínimo imprescindible: `DB_URL`, `DB_USERNAME`, `DB_PASSWORD` y `JWT_SECRET` (al menos 32 bytes).
+
+Ejemplo en PowerShell, con valores propios:
+
+```powershell
+$env:DB_URL = "jdbc:postgresql://localhost:5432/facilityhub"
+$env:DB_USERNAME = "facilityhub"
+$env:DB_PASSWORD = "<contraseña de la base>"
+$env:JWT_SECRET = "<cadena aleatoria de 32 o más caracteres>"
+$env:FACILITYHUB_STORAGE_ROOT = "C:\facilityhub\documentos"
+```
+
+## Ejecución
+```powershell
+cd backend
+mvn spring-boot:run
+```
+
+> **Estado de validación:**
+> - **Validado:** el arranque nativo, desde cero en una base desechable (Flyway V1–V9, health check, login y flujo completo de la API, FH-008A). El backend se lanzó desde las clases compiladas: `mvn compile` y después `java -cp target/classes;<classpath de dependencias> com.facilityhub.FacilityHubApplication`.
+> - **No validado en el equipo de desarrollo:** `mvn spring-boot:run` y `mvn package`, porque el plugin de Spring Boot no estaba en la caché offline de Maven.
+
+- **Salud:** `GET http://localhost:8080/actuator/health` → `{"status":"UP"}`. No expone detalles.
+- **Recordatorios automáticos:** desactivados (`FACILITYHUB_RECORDATORIOS_ENABLED=false`). ADMIN puede lanzarlos a mano con `POST /api/admin/recordatorios/ejecutar`, que por defecto es una simulación y no escribe nada.
+
+### Docker (alternativa)
+`docker-compose.yml` levanta PostgreSQL 18.6 y el backend. Necesita `DB_PASSWORD` y `JWT_SECRET` como variables de entorno.
+
+```powershell
+cd backend
+docker compose up --build -d
+```
+
+> **Atención:**
+> - Publica el puerto **5432**, que choca con un PostgreSQL local ya instalado.
+> - Usa los volúmenes `facilityhub_pgdata` y `facilityhub_documents`.
+> - **Solo revisión estática, sin ejecución:** Docker no estaba instalado en el equipo de desarrollo (FH-008A).
+> - El healthcheck del backend usa `wget`; no está verificado que la imagen `eclipse-temurin:21-jre` lo incluya.
+> - La vía validada es la ejecución nativa descrita arriba.
+
+## Usuarios de demostración
+| Rol | Usuario |
+|---|---|
+| ADMIN | `admin@facilityhub.local` |
+| EXPLOTACION | `explotacion@facilityhub.local` |
+| INQUILINO | `inquilino@facilityhub.local` (ocupante del local L-101) |
+
+Las contraseñas no se publican en el repositorio: las facilita el responsable del proyecto. Los técnicos de proveedor (rol PROVEEDOR) los crea un ADMIN con `POST /api/proveedores/{id}/usuarios`.
 
 ## Endpoints
+Todos requieren `Authorization: Bearer <token>`, salvo el login y `/actuator/health`. Gestión = ADMIN y EXPLOTACION.
 
-- `POST /api/auth/login`
-- `GET /api/centros`
-- `GET /api/centros/{id}`
-- `GET /api/centros/{id}/locales`
-- `GET /api/locales/{id}/inquilino-actual`
-- `GET /api/locales/{id}/instalaciones`
-- `GET /api/locales/{id}/obligaciones`
-- `GET /api/obligaciones/{id}/mantenimientos`
-- `POST /api/obligaciones/{id}/mantenimientos`
-- `PATCH /api/mantenimientos/{id}/estado`
-- `GET /api/mantenimientos/{id}/documentos`
-- `POST /api/mantenimientos/{id}/documentos`
-- `GET /api/documentos/{id}/archivo`
-- `PATCH /api/documentos/{id}/revision`
+| Área | Endpoints | Roles |
+|---|---|---|
+| Autenticación | `POST /api/auth/login` | público |
+| Centros y locales | `GET /api/centros`, `/api/centros/{id}`, `/api/centros/{id}/locales`; `GET /api/locales/{id}/inquilino-actual`, `/api/locales/{id}/instalaciones` | gestión e INQUILINO (su local) |
+| Obligaciones | `GET /api/locales/{id}/obligaciones`; `GET` y `POST /api/obligaciones/{id}/mantenimientos`; `PATCH /api/obligaciones/{id}/responsable` | consulta: gestión e INQUILINO; escritura: gestión |
+| Mantenimientos | `PATCH /api/mantenimientos/{id}/estado` (sin FINALIZADO); `GET`, `PUT` y `DELETE /api/mantenimientos/{id}/asignacion` | gestión |
+| Intervenciones | `GET` y `POST /api/mantenimientos/{id}/intervenciones`; `GET` y `PATCH /api/intervenciones/{id}`; `POST …/{id}/documentos`, `POST …/{id}/envio`; `GET …/{id}/documentos/{docId}/archivo` | gestión y PROVEEDOR asignado |
+| Validación | `GET /api/intervenciones/pendientes`; `POST /api/intervenciones/{id}/validacion` (APROBAR, SOLICITAR_CORRECCION o CERRAR_SIN_CUMPLIMIENTO) | gestión |
+| Documentos | `GET` y `POST /api/mantenimientos/{id}/documentos`; `PATCH /api/documentos/{id}/revision`, `/visibilidad`; `GET /api/documentos/{id}/archivo` | gestión; INQUILINO solo descarga lo VÁLIDO y COMPARTIDO de su ocupación |
+| Proveedores | `GET /api/proveedores`, `/{id}`; `POST`, `PATCH /api/proveedores…`, `POST` y `PATCH …/{id}/usuarios…` | consulta: gestión; altas: ADMIN |
+| Área del proveedor | `GET /api/proveedor/trabajos`, `/api/proveedor/trabajos/{mantenimientoId}` | PROVEEDOR |
+| Área del inquilino | `/api/inquilino/obligaciones`, `…/{id}/mantenimientos`, `…/{id}/proveedor`, `/api/inquilino/proveedores?cif=`, `/api/inquilino/solicitudes-proveedor`, `/api/inquilino/mantenimientos/{id}/fecha-prevista`, `…/asignacion` | INQUILINO |
+| Revisión de proveedores | `GET /api/declaraciones-proveedor/pendientes`, `PATCH …/{id}/revision`; `GET /api/solicitudes-proveedor`, `PATCH …/{id}` | gestión (la resolución de solicitudes es solo de ADMIN) |
+| Panel de Explotación | `GET /api/gestion/resumen`; `GET /api/gestion/trabajos?filtro=VENCIDOS\|PROXIMOS\|PENDIENTE_VALIDACION\|REQUIERE_CORRECCION\|SIN_ASIGNAR` | gestión |
+| Historial del local | `GET /api/locales/{id}/historial` | gestión (completo) e INQUILINO (aprobados de su ocupación) |
+| Alertas | `GET /api/alertas`, `/api/alertas/no-leidas`; `PATCH /api/alertas/{id}/leida` | todos (solo las propias) |
+| Recordatorios | `POST /api/admin/recordatorios/ejecutar?simulacion=` | ADMIN |
 
-## Usuarios demo
+**Respuestas de error:**
+- 401: sin token o token no válido;
+- 403: rol sin permiso;
+- 404 uniforme: recurso inexistente o ajeno;
+- 409: conflicto de versión o de estado.
 
-Clave para todos: `<solicitar al responsable del proyecto>`
-
-- `admin@facilityhub.local`
-- `explotacion@facilityhub.local`
-- `inquilino@facilityhub.local`
-
-## Estado de validacion
-
-La estructura de codigo y configuracion ha sido revisada estaticamente. La prueba real con Maven + PostgreSQL + Docker se mantiene pendiente y debe realizarse antes de considerar este backend completamente validado.
+## Pruebas
+- **Unitarias:** `mvn test` ejecuta 147 pruebas (Mockito) sin base de datos.
+- **Integración (`*IT`):** MockMvc, JWT y JPQL reales con *rollback* por prueba.
+  - Una barrera (`P4Entorno`) solo permite ejecutarlas contra la base de pruebas dedicada `facilityhub_fh005_p3`, con `-Dp4.autorizado=facilityhub_fh005_p3` y la variable `P4_DB_PASSWORD`.
+  - No se lanzan con `mvn test` por defecto.
+- **API de extremo a extremo:** `scripts/validar-api.ps1`, solo contra un backend desechable en `127.0.0.1:18080` (ver `docs/PLAN_PRUEBAS.md`).
