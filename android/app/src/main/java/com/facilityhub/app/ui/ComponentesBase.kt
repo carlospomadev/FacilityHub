@@ -174,6 +174,9 @@ internal fun ScreenScaffold(
     scrollable: Boolean = false,
     actionLabel: String? = null,
     accionExtra: (@Composable () -> Unit)? = null,
+    // FH-009 / R5: barra fija inferior (p. ej. acciones de validacion). Queda encima de la barra de gestos y del teclado;
+    // el contenido desplazable termina por encima de ella, asi que no tapa nada.
+    barraInferior: (@Composable ColumnScope.() -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit
 ) {
     // FH-009 / R3: en la raiz de una pestana no hay flecha atras; se muestra el menu de cuenta (con «Cerrar sesión»).
@@ -203,6 +206,20 @@ internal fun ScreenScaffold(
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
             )
+        },
+        bottomBar = {
+            if (barraInferior != null) {
+                Surface(color = MaterialTheme.colorScheme.surfaceContainer, tonalElevation = 3.dp, shadowElevation = 6.dp) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom + WindowInsetsSides.Horizontal))
+                            .padding(horizontal = FhEspacio.l, vertical = FhEspacio.s),
+                        verticalArrangement = Arrangement.spacedBy(FhEspacio.xs),
+                        content = barraInferior
+                    )
+                }
+            }
         }
     ) { paddingValues ->
         Column(
