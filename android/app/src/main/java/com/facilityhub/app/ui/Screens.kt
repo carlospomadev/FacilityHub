@@ -6,12 +6,26 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.autofill.ContentType
+import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.semantics.contentType
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.facilityhub.app.data.*
@@ -23,22 +37,40 @@ fun LoginScreen(
     vm: FacilityViewModel,
     onLoggedIn: () -> Unit
 ) {
-    var email by remember {
-        mutableStateOf("explotacion@facilityhub.local")
+    // FH-009 / R2: el correo empieza vacio (sin cuentas precargadas). La contrasena vive solo en el estado de la pantalla:
+    // no se guarda ni se registra, y rememberSaveable no se usa para ella (no queda en el estado guardado del sistema).
+    var email by rememberSaveable { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
+    var verPassword by remember { mutableStateOf(false) }
+    // Errores de validacion local: solo se muestran tras intentar entrar y se limpian al editar el campo.
+    var errorEmail by remember { mutableStateOf<String?>(null) }
+    var errorPassword by remember { mutableStateOf<String?>(null) }
+    val focus = LocalFocusManager.current
+    val credenciales = vm.credencialesIncorrectas
+
+    fun entrar() {
+        if (vm.loading) return
+        val correo = email.trim()
+        errorEmail = when {
+            correo.isEmpty() -> "Introduce tu correo."
+            !correo.contains('@') || correo.startsWith('@') || correo.endsWith('@') -> "Introduce un correo válido."
+            else -> null
+        }
+        errorPassword = if (password.isEmpty()) "Introduce tu contraseña." else null
+        if (errorEmail != null || errorPassword != null) { vm.clearError(); return }
+        focus.clearFocus()
+        vm.login(email = correo, password = password, onSuccess = onLoggedIn)
     }
 
-    var password by remember {
-        mutableStateOf("")
-    }
-
-    // FH-009 / R1: solo cambia el aspecto (tema, logotipo, areas seguras y mensaje de error). El comportamiento del
-    // formulario se revisa en R2.
     Surface(color = MaterialTheme.colorScheme.background, modifier = Modifier.fillMaxSize()) {
+        // Desplazable y con relleno de teclado: con fuente al 200 % o el teclado abierto todo sigue siendo alcanzable.
+        BoxWithConstraints(Modifier.fillMaxSize().safeDrawingPadding()) {
         Column(
             modifier = Modifier
-                .fillMaxSize()
-                .safeDrawingPadding()
-                .padding(horizontal = 28.dp),
+                .fillMaxWidth()
+                .heightIn(min = maxHeight)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 28.dp, vertical = FhEspacio.l),
             verticalArrangement = Arrangement.Center
         ) {
             Surface(
@@ -68,45 +100,76 @@ fun LoginScreen(
 
             Spacer(modifier = Modifier.height(FhEspacio.xl))
 
+            // Orden fijo de campos (correo, contrasena): la demostracion automatizada los localiza por posicion.
             OutlinedTextField(
                 value = email,
-                onValueChange = { email = it },
+                onValueChange = { email = it; errorEmail = null; if (vm.error != null) vm.clearError() },
                 label = { Text("Correo") },
+                placeholder = { Text("nombre@empresa.com") },
                 singleLine = true,
-                modifier = Modifier.fillMaxWidth()
+                enabled = !vm.loading,
+                isError = errorEmail != null || credenciales,
+                supportingText = errorEmail?.let { { Text(it) } },
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Email, imeAction = ImeAction.Next, autoCorrectEnabled = false,
+                    capitalization = KeyboardCapitalization.None
+                ),
+                keyboardActions = KeyboardActions(onNext = { focus.moveFocus(FocusDirection.Down) }),
+                modifier = Modifier.fillMaxWidth().semantics { contentType = ContentType.Username + ContentType.EmailAddress }
             )
 
-            Spacer(modifier = Modifier.height(FhEspacio.m))
+            Spacer(modifier = Modifier.height(FhEspacio.s))
 
             OutlinedTextField(
                 value = password,
-                onValueChange = { password = it },
+                onValueChange = { password = it; errorPassword = null; if (vm.error != null) vm.clearError() },
                 label = { Text("Contraseña") },
                 singleLine = true,
-                visualTransformation = PasswordVisualTransformation(),
-                modifier = Modifier.fillMaxWidth()
+                enabled = !vm.loading,
+                isError = errorPassword != null || credenciales,
+                supportingText = errorPassword?.let { { Text(it) } },
+                visualTransformation = if (verPassword) VisualTransformation.None else PasswordVisualTransformation(),
+                trailingIcon = {
+                    IconButton(onClick = { verPassword = !verPassword }) {
+                        Icon(
+                            if (verPassword) FhIcons.Ocultar else FhIcons.Mostrar,
+                            contentDescription = if (verPassword) "Ocultar contraseña" else "Mostrar contraseña"
+                        )
+                    }
+                },
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Password, imeAction = ImeAction.Go, autoCorrectEnabled = false
+                ),
+                keyboardActions = KeyboardActions(onGo = { entrar() }),
+                modifier = Modifier.fillMaxWidth().semantics { contentType = ContentType.Password }
             )
 
             Spacer(modifier = Modifier.height(FhEspacio.l))
 
             Button(
-                onClick = {
-                    vm.login(
-                        email = email,
-                        password = password,
-                        onSuccess = onLoggedIn
-                    )
-                },
+                onClick = { entrar() },
                 enabled = !vm.loading,
                 modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
             ) {
-                Text(if (vm.loading) "Accediendo..." else "Iniciar sesión")
+                if (vm.loading) {
+                    CircularProgressIndicator(
+                        strokeWidth = 2.dp, color = LocalContentColor.current,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(Modifier.width(FhEspacio.s))
+                    Text("Accediendo…")
+                } else {
+                    Text("Iniciar sesión")
+                }
             }
 
+            // Un unico aviso, solo ante un error del ultimo intento; desaparece al editar cualquier campo. Ante un fallo de
+            // conexion se ofrece reintentar con los mismos datos.
             vm.error?.let { error ->
                 Spacer(modifier = Modifier.height(FhEspacio.m))
-                EstadoError(error)
+                if (credenciales) EstadoError(error) else EstadoError(error, enabled = !vm.loading) { entrar() }
             }
+        }
         }
     }
 }

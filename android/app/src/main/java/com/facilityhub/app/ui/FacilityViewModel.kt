@@ -9,9 +9,12 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.facilityhub.app.data.*
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import retrofit2.HttpException
 import java.io.File
 import java.io.IOException
@@ -53,17 +56,42 @@ class FacilityViewModel(application: Application) : AndroidViewModel(application
     var trabajos by mutableStateOf<List<TrabajoProveedorDto>>(emptyList()); private set
     var trabajo by mutableStateOf<TrabajoProveedorDto?>(null); private set
 
-    fun login(email: String, password: String, onSuccess: () -> Unit) = run {
+    // FH-009 / R2: true cuando el ultimo intento de login fallo por credenciales (los campos se marcan en error).
+    var credencialesIncorrectas by mutableStateOf(false); private set
+
+    fun login(email: String, password: String, onSuccess: () -> Unit) {
+        // Guarda sincrona contra envios duplicados (doble toque, tecla Entrar + boton).
+        if (loading) return
+        loading = true; error = null; credencialesIncorrectas = false
         viewModelScope.launch {
-            action {
-                val result = repository.login(email, password)
-                loggedIn = true; userName = result.nombre; role = result.rol
-                if (esProveedor) {
-                    trabajos = repository.trabajos()
-                } else if (puedeGestionar || esInquilino) {
-                    centros = repository.centros()
+            try {
+                // Limite propio solo para la autenticacion (no cambia el cliente HTTP del resto de pantallas): ante un
+                // servidor inalcanzable el aviso llega en segundos y no tras el tiempo de espera por defecto.
+                val result = try {
+                    withTimeout(LOGIN_TIMEOUT_MS) { repository.login(email.trim(), password) }
+                } catch (e: TimeoutCancellationException) {
+                    error = MENSAJE_SIN_CONEXION; return@launch
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    credencialesIncorrectas = e is HttpException && e.code() in setOf(400, 401)
+                    error = mensajeErrorLogin(e); return@launch
                 }
-                onSuccess()
+                loggedIn = true; userName = result.nombre; role = result.rol
+                try {
+                    if (esProveedor) {
+                        trabajos = repository.trabajos()
+                    } else if (puedeGestionar || esInquilino) {
+                        centros = repository.centros()
+                    }
+                    onSuccess()
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    error = mensajeError(e)
+                }
+            } finally {
+                loading = false
             }
         }
     }
@@ -148,10 +176,10 @@ class FacilityViewModel(application: Application) : AndroidViewModel(application
         centros = emptyList(); locales = emptyList(); obligaciones = emptyList(); mantenimientos = emptyList()
         documentos = emptyList(); trabajos = emptyList(); trabajo = null
         // FH-006 / P6-D3-6: sin restos de la sesion anterior en el login (p. ej. un error de conexion previo a un 401).
-        inquilino = null; instalaciones = emptyList(); error = null
+        inquilino = null; instalaciones = emptyList(); error = null; credencialesIncorrectas = false
     }
 
-    fun clearError() { error = null }
+    fun clearError() { error = null; credencialesIncorrectas = false }
 
     private suspend fun action(block: suspend () -> Unit) {
         loading = true; error = null
@@ -213,6 +241,20 @@ internal fun prepararDocumentoLocal(app: Application, uri: Uri): DocumentoLocal 
 }
 
 // Mensajes de error comunes. 400 y 409 muestran el detalle del backend (regla de negocio o conflicto de version).
+// FH-009 / R2: mensajes propios del login. Un 401 aqui son credenciales, no una sesion caducada; no se distingue si
+// falla el correo o la contrasena (no se revela que cuentas existen).
+private const val LOGIN_TIMEOUT_MS = 6_000L
+internal const val MENSAJE_SIN_CONEXION =
+    "No hay conexión con el servidor. Comprueba que el servicio está activo y vuelve a intentarlo."
+
+internal fun mensajeErrorLogin(e: Exception): String = when {
+    e is HttpException && e.code() in setOf(400, 401) -> "Correo o contraseña incorrectos."
+    e is HttpException && e.code() == 429 -> "Demasiados intentos. Espera un momento y vuelve a intentarlo."
+    e is HttpException && e.code() >= 500 -> "El servidor no está disponible en este momento. Inténtalo más tarde."
+    e is IOException -> MENSAJE_SIN_CONEXION
+    else -> mensajeError(e)
+}
+
 internal fun mensajeError(e: Exception): String = when (e) {
     is HttpException -> when (e.code()) {
         400 -> detalleError(e) ?: "Datos no válidos."

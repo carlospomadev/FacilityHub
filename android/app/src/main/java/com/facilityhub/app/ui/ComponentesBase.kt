@@ -112,7 +112,7 @@ internal fun FilaChips(modifier: Modifier = Modifier, contenido: @Composable () 
 internal fun Mensaje(texto: String, tono: Tono, accion: String? = null, enabled: Boolean = true, onAccion: (() -> Unit)? = null) {
     val (fondo, contenido) = coloresTono(tono)
     val icono = when (tono) {
-        Tono.ERROR -> if (texto.startsWith("No se pudo conectar")) FhIcons.SinConexion else FhIcons.Vencido
+        Tono.ERROR -> if (texto.startsWith("No se pudo conectar") || texto.startsWith("No hay conexión")) FhIcons.SinConexion else FhIcons.Vencido
         Tono.EXITO -> FhIcons.Hecho
         else -> FhIcons.Informacion
     }
