@@ -46,6 +46,28 @@ class FlujoViewModel(application: Application) : AndroidViewModel(application) {
 
     fun limpiarMensajes() { error = null; aviso = null }
 
+    // FH-009 / R6: ultimo comentario de «Pedir correccion» por intervencion (para «Mis trabajos» del PROVEEDOR). Se lee
+    // del endpoint existente GET /api/intervenciones/{id}, que ya autoriza al proveedor sobre las de su empresa. Carga
+    // silenciosa: un fallo no afecta a la pantalla (solo no se muestra el motivo).
+    var comentariosCorreccion by mutableStateOf<Map<Long, ValidacionDto>>(emptyMap()); private set
+
+    fun cargarComentariosCorreccion(intervenciones: List<Long>) {
+        // Se conservan los ya cargados mientras llegan los nuevos (sin parpadeo) y se descartan los que ya no aplican.
+        comentariosCorreccion = comentariosCorreccion.filterKeys { it in intervenciones }
+        intervenciones.forEach { id ->
+            viewModelScope.launch {
+                try {
+                    val v = repository.intervencion(id).validaciones.orEmpty()
+                        .filter { it.accion == ACCION_SOLICITAR_CORRECCION }
+                        .maxByOrNull { it.fecha.orEmpty() }
+                    if (v != null) comentariosCorreccion = comentariosCorreccion + (id to v)
+                } catch (e: Exception) {
+                    if (e is HttpException && e.code() == 401) sesionCaducada = true
+                }
+            }
+        }
+    }
+
     // ---------- Lecturas ----------
 
     fun cargarIntervencionesMantenimiento(mantenimientoId: Long) {
@@ -214,7 +236,7 @@ class FlujoViewModel(application: Application) : AndroidViewModel(application) {
         intervencionesMantenimiento = emptyList(); intervencion = null; pendientes = emptyList(); proveedores = emptyList()
         asignacion = null; declaraciones = emptyList(); solicitudesGestion = emptyList(); obligacionesInquilino = emptyList()
         mantenimientosInquilino = emptyList(); solicitudesInquilino = emptyList(); proveedorEncontrado = null
-        error = null; aviso = null; sesionCaducada = false
+        error = null; aviso = null; sesionCaducada = false; comentariosCorreccion = emptyMap()
     }
 
     // ---------- Utilidades ----------

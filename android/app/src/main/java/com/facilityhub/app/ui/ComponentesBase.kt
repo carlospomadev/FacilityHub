@@ -12,6 +12,8 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.facilityhub.app.ui.theme.FhEspacio
@@ -232,6 +234,35 @@ internal fun ScreenScaffold(
                 .padding(horizontal = FhEspacio.l, vertical = FhEspacio.m),
             content = content
         )
+    }
+}
+
+/**
+ * FH-009 / R6: pestanas internas de una pantalla (no la barra inferior). Con fuente normal ocupan todo el ancho; con
+ * fuente grande pasan a desplazables, con cada etiqueta en una linea, para no partir palabras.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+internal fun PestanasInternas(titulos: List<String>, seleccionada: Int, onSeleccionar: (Int) -> Unit) {
+    val grande = LocalDensity.current.fontScale >= 1.3f
+    val pestanas: @Composable () -> Unit = {
+        titulos.forEachIndexed { i, t ->
+            Tab(
+                selected = seleccionada == i,
+                onClick = { onSeleccionar(i) },
+                modifier = Modifier.heightIn(min = 48.dp),
+                text = {
+                    if (grande) Text(t, maxLines = 1, softWrap = false)
+                    else Text(t, textAlign = TextAlign.Center)
+                }
+            )
+        }
+    }
+    if (grande) {
+        PrimaryScrollableTabRow(selectedTabIndex = seleccionada, edgePadding = 0.dp,
+            containerColor = MaterialTheme.colorScheme.background, tabs = pestanas)
+    } else {
+        PrimaryTabRow(selectedTabIndex = seleccionada, containerColor = MaterialTheme.colorScheme.background, tabs = pestanas)
     }
 }
 

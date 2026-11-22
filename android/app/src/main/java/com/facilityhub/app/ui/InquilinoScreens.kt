@@ -4,6 +4,14 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.style.TextAlign
+import java.time.LocalDate
+import java.time.ZoneId
+import java.time.temporal.ChronoUnit
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -25,66 +33,76 @@ internal fun etiquetaDeclaracion(e: String) = when (e) {
     else -> e
 }
 
+// FH-009 / R6: «Mi local» del INQUILINO con pestanas «Obligaciones» e historial del local (linea de tiempo), sin pasar
+// por «Centros». El contenido lo decide el backend (obligaciones de sus ocupaciones vigentes; historial solo con
+// cumplimientos aprobados y certificados compartidos). Las obligaciones NHOOD son solo de consulta.
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun ObligacionesInquilinoScreen(
     flujo: FlujoViewModel,
+    historial: HistorialViewModel,
     onObligacion: (ObligacionInquilinoDto) -> Unit,
-    onHistorial: (Long, String) -> Unit,
     onBack: () -> Unit,
+    onSesionCaducada: () -> Unit,
     // FH-009 / R3: las solicitudes son una pestana propia; aqui queda el acceso a la ficha del centro y del local.
     onCentro: (() -> Unit)? = null
 ) {
     LaunchedEffect(Unit) { flujo.limpiarMensajes(); flujo.cargarObligacionesInquilino() }
+    LaunchedEffect(historial.sesionCaducada) { if (historial.sesionCaducada) onSesionCaducada() }
     var declarando by remember { mutableStateOf<ObligacionInquilinoDto?>(null) }
     var solicitando by remember { mutableStateOf<ObligacionInquilinoDto?>(null) }
+    val descargar = rememberDescargaDocumento(flujo)
 
-    ScreenScaffold(title = "Mis obligaciones", subtitle = "Mi local · Inquilino", onAction = onBack, scrollable = true) {
-        MensajesFlujo(flujo)
-        if (onCentro != null) {
-            TextButton(onClick = onCentro) {
-                Icon(FhIcons.Centros, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(FhEspacio.s))
-                Text("Mi centro y local")
+    // Locales con ocupacion vigente (de las obligaciones que devuelve el backend).
+    val locales = flujo.obligacionesInquilino.distinctBy { it.localId }.map { it.localId to it.local }
+    var pestana by rememberSaveable { mutableStateOf(0) }
+    var localElegido by rememberSaveable { mutableStateOf<Long?>(null) }
+    val local = locales.firstOrNull { it.first == localElegido } ?: locales.firstOrNull()
+    // El historial se pide al abrir su pestana (y al volver a ella); el backend vuelve a comprobar el acceso.
+    LaunchedEffect(pestana, local?.first) { if (pestana == 1 && local != null) historial.cargar(local.first) }
+
+    ScreenScaffold(title = "Mis obligaciones", subtitle = local?.second?.let { "Mi local · $it" } ?: "Mi local · Inquilino", onAction = onBack) {
+        val n = flujo.obligacionesInquilino.size
+        PestanasInternas(
+            titulos = listOf("Obligaciones · $n", if (locales.size == 1) "Historial del local ${locales[0].second}" else "Historial"),
+            seleccionada = pestana,
+            onSeleccionar = { pestana = it }
+        )
+        Spacer(Modifier.height(FhEspacio.s))
+        if (pestana == 0) {
+            MensajesFlujo(flujo)
+            if (!flujo.loading && flujo.obligacionesInquilino.isEmpty() && flujo.error == null) {
+                EstadoVacio("No tienes obligaciones en locales con ocupación vigente.", FhIcons.Edificio)
             }
-        }
-        // FH-006 / P6-D3-4: historial de cada local con ocupacion vigente (el backend vuelve a comprobar el acceso).
-        flujo.obligacionesInquilino.distinctBy { it.localId }.forEach { o ->
-            FilledTonalButton(onClick = { onHistorial(o.localId, o.local) }, modifier = Modifier.fillMaxWidth().padding(vertical = FhEspacio.xs)) {
-                Icon(FhIcons.Historico, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(FhEspacio.s))
-                Text("Historial del local ${o.local}")
+            LazyColumn(verticalArrangement = Arrangement.spacedBy(FhEspacio.s), contentPadding = PaddingValues(bottom = FhEspacio.l)) {
+                if (onCentro != null) item(key = "centro") {
+                    TextButton(onClick = onCentro, modifier = Modifier.heightIn(min = 48.dp)) {
+                        Icon(FhIcons.Centros, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(FhEspacio.s))
+                        Text("Mi centro y local")
+                    }
+                }
+                items(flujo.obligacionesInquilino, key = { it.id }) { o ->
+                    TarjetaObligacion(o, onAbrir = { onObligacion(o) },
+                        onDeclarar = { flujo.limpiarMensajes(); declarando = o }, onSolicitar = { flujo.limpiarMensajes(); solicitando = o })
+                }
             }
-        }
-        if (!flujo.loading && flujo.obligacionesInquilino.isEmpty() && flujo.error == null) {
-            EstadoVacio("No tienes obligaciones en locales con ocupación vigente.", FhIcons.Edificio)
-        }
-        if (flujo.obligacionesInquilino.isNotEmpty()) SectionTitle("Obligaciones")
-        flujo.obligacionesInquilino.forEach { o ->
-            val acciones = o.accionesPermitidas.orEmpty()
-            Card(
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
-                modifier = Modifier.fillMaxWidth().padding(vertical = FhEspacio.xs).clickable { onObligacion(o) }
-            ) {
-                Column(modifier = Modifier.padding(FhEspacio.m)) {
-                    Text(o.tipoMantenimiento, style = MaterialTheme.typography.titleSmall)
-                    Text("${o.local}${o.instalacion?.let { " · $it" }.orEmpty()}", style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text("Próxima fecha: ${fechaCorta(o.proximaFecha)}", style = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier.padding(top = FhEspacio.xs))
-                    FilaChips {
-                        EstadoChip(if (o.responsable == "INQUILINO") "Responsable: inquilino (gestionas tú el proveedor)" else "Responsable: NHOOD (solo consulta)",
-                            if (o.responsable == "INQUILINO") Tono.PRIMARIO else Tono.NEUTRO)
-                        o.proveedorDeclarado?.let { d ->
-                            EstadoChip("Proveedor declarado: ${d.proveedor} · ${etiquetaDeclaracion(d.estado)}",
-                                when (d.estado) { "ACEPTADO" -> Tono.EXITO; "RECHAZADO" -> Tono.ERROR; else -> Tono.AVISO })
-                        }
+        } else {
+            if (locales.size > 1) {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(FhEspacio.s)) {
+                    locales.forEach { (id, nombre) ->
+                        FilterChip(selected = local?.first == id, onClick = { localElegido = id }, label = { Text(nombre) })
                     }
-                    o.proveedorDeclarado?.let { d ->
-                        d.motivoRevision?.takeIf { d.estado == "RECHAZADO" }?.let { Text("Motivo: $it", color = MaterialTheme.colorScheme.error) }
-                    }
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        if (ACCION_DECLARAR_PROVEEDOR in acciones) TextButton(onClick = { flujo.limpiarMensajes(); declarando = o }) { Text("Declarar proveedor") }
-                        if (ACCION_SOLICITAR_PROVEEDOR in acciones) TextButton(onClick = { flujo.limpiarMensajes(); solicitando = o }) { Text("Solicitar uno nuevo") }
+                }
+            }
+            if (local == null) {
+                if (!flujo.loading) EstadoVacio("No tienes locales con ocupación vigente.", FhIcons.Edificio)
+            } else {
+                EstadoHistorial(historial, flujo, local.first)
+                LazyColumn(contentPadding = PaddingValues(bottom = FhEspacio.l)) {
+                    // Solo se muestra el historial del local elegido (el ViewModel podria conservar otro durante la carga).
+                    if (historial.localId == local.first) {
+                        lineaTemporalHistorial(historial, enabled = !(historial.loading || flujo.loading), onDescargar = descargar)
                     }
                 }
             }
@@ -93,6 +111,62 @@ fun ObligacionesInquilinoScreen(
 
     declarando?.let { o -> DialogoDeclarar(flujo, o) { declarando = null } }
     solicitando?.let { o -> DialogoSolicitar(flujo, o) { solicitando = null } }
+}
+
+/** Dias hasta la proxima fecha (informativo: no cambia el estado de cumplimiento, que decide el backend). */
+private fun diasHasta(fecha: String): Long? = try {
+    ChronoUnit.DAYS.between(LocalDate.now(ZoneId.of("Europe/Madrid")), LocalDate.parse(fecha))
+} catch (_: Exception) { null }
+
+internal fun textoPeriodicidad(meses: Int?): String? = when (meses) {
+    null -> null
+    1 -> "Mensual"
+    3 -> "Trimestral (cada 3 meses)"
+    6 -> "Semestral (cada 6 meses)"
+    12 -> "Anual (cada 12 meses)"
+    else -> "Cada $meses meses"
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun TarjetaObligacion(o: ObligacionInquilinoDto, onAbrir: () -> Unit, onDeclarar: () -> Unit, onSolicitar: () -> Unit) {
+    val acciones = o.accionesPermitidas.orEmpty()
+    val dias = diasHasta(o.proximaFecha)
+    Card(
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+        modifier = Modifier.fillMaxWidth().clickable(onClickLabel = "Ver mantenimientos", role = Role.Button, onClick = onAbrir)
+    ) {
+        Column(Modifier.padding(FhEspacio.m), verticalArrangement = Arrangement.spacedBy(FhEspacio.xs)) {
+            Row(verticalAlignment = Alignment.Top) {
+                Text(o.tipoMantenimiento, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                Icon(FhIcons.Siguiente, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Text(listOfNotNull(o.local, o.instalacion).joinToString(" · "), style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+            FilaChips {
+                // Vencimiento relativo informativo (texto e icono, no solo color).
+                if (dias != null) EstadoChip(textoDias(dias), when { dias < 0 -> Tono.ERROR; dias <= 30 -> Tono.AVISO; else -> Tono.NEUTRO },
+                    if (dias < 0) FhIcons.Vencido else FhIcons.Calendario)
+                EstadoChip(if (o.responsable == "INQUILINO") "Responsable: inquilino (gestionas tú el proveedor)" else "Responsable: NHOOD (solo consulta)",
+                    if (o.responsable == "INQUILINO") Tono.PRIMARIO else Tono.NEUTRO)
+                o.proveedorDeclarado?.let { d ->
+                    EstadoChip("Proveedor declarado: ${d.proveedor} · ${etiquetaDeclaracion(d.estado)}",
+                        when (d.estado) { "ACEPTADO" -> Tono.EXITO; "RECHAZADO" -> Tono.ERROR; else -> Tono.AVISO })
+                }
+            }
+            DatoEtiquetado("Próxima fecha", fechaCorta(o.proximaFecha))
+            textoPeriodicidad(o.periodicidadMeses)?.let { DatoEtiquetado("Periodicidad", it) }
+            o.proveedorDeclarado?.let { d ->
+                d.motivoRevision?.takeIf { d.estado == "RECHAZADO" }?.let { Text("Motivo: $it", color = MaterialTheme.colorScheme.error) }
+            }
+            if (ACCION_DECLARAR_PROVEEDOR in acciones || ACCION_SOLICITAR_PROVEEDOR in acciones) {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    if (ACCION_DECLARAR_PROVEEDOR in acciones) TextButton(onClick = onDeclarar) { Text("Declarar proveedor") }
+                    if (ACCION_SOLICITAR_PROVEEDOR in acciones) TextButton(onClick = onSolicitar) { Text("Solicitar uno nuevo") }
+                }
+            }
+        }
+    }
 }
 
 // Busqueda exacta por CIF (sin listar el catalogo de proveedores) y confirmacion de la declaracion.
@@ -369,7 +443,7 @@ internal fun CumplimientoCertificados(c: CumplimientoInquilinoDto, enabled: Bool
         FilaDocumento(
             nombre = cert.nombre,
             detalle = "Certificado compartido",
-            accion = { TextButton(onClick = { onDescargar(cert) }, enabled = enabled) { Text("Descargar") } }
+            accion = { BotonDescargar(cert.nombre, enabled) { onDescargar(cert) } }
         )
     }
 }
