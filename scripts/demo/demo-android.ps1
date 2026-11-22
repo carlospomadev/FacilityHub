@@ -119,15 +119,21 @@ $ok = Invoke-Login $cred "explotacion"
 Add-Paso "EXPLOTACION" "AND-EXP-01" "login" $ok
 if ($ok) {
     Invoke-Tap "Panel de Explotaci*" 0 3000 | Out-Null
-    $okPanel = [bool](Wait-Texto "Datos a $($man.hoyMadrid)*")
+    # FH-009 / R4: la fecha se muestra legible («Datos a 22 nov 2026»); se comprueba dia, mes (prefijo) y ano de hoy.
+    $hoyPanel = [datetime]::ParseExact($man.hoyMadrid, "yyyy-MM-dd", $null)
+    $mesPanel = @("ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic")[$hoyPanel.Month - 1]
+    $okPanel = [bool](Wait-Texto "Datos a $($hoyPanel.Day) $mesPanel* $($hoyPanel.Year)*")
     Add-Paso "EXPLOTACION" "AND-EXP-02" "panel abierto con fecha de hoy" $okPanel ""
-    Add-Paso "EXPLOTACION" "AND-EXP-03" "vencidos: revision electrica L-205 y climatizacion L-101" ([bool](Wait-Texto "*retraso*") -and [bool](Find-Nodo "*L-205*")) ""
     Save-Captura "explotacion-01-panel-vencidos"
+    # FH-009 / R4: indicadores y accesos ocupan la parte superior del panel; las tarjetas se localizan desplazando.
+    Add-Paso "EXPLOTACION" "AND-EXP-03" "vencidos: revision electrica L-205 y climatizacion L-101" ([bool](Wait-Texto "*retraso*") -and [bool](Find-ConScroll "*L-205*")) ""
     # Acceso a un mantenimiento (vencido sin proveedor).
-    Invoke-Tap "*L-205*" 0 2500 | Out-Null
+    Invoke-TapScroll "*L-205*" 2500 | Out-Null
     Add-Paso "EXPLOTACION" "AND-EXP-04" "gestion del mantenimiento vencido sin proveedor" ([bool](Wait-Texto "Asignaci*")) ""
     Save-Captura "explotacion-02-mantenimiento"
     Invoke-Volver
+    # Vuelta al inicio del panel (se conserva la posicion de desplazamiento) para usar los indicadores.
+    for ($i = 0; $i -lt 4; $i++) { Invoke-Adb @("shell", "input", "swipe", "540", "700", "540", "1900", "200") | Out-Null; Start-Sleep -Milliseconds 400 }
     Invoke-Tap "Pr?ximos" | Out-Null
     Add-Paso "EXPLOTACION" "AND-EXP-05" "proximos: incluye zona comun" ([bool](Wait-Texto "*Zona com*")) ""
     Save-Captura "explotacion-03-proximos"
