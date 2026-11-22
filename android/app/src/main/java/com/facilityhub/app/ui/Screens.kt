@@ -6,16 +6,17 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.facilityhub.app.data.*
+import com.facilityhub.app.ui.theme.FhEspacio
+import com.facilityhub.app.ui.theme.FhIcons
 
 @Composable
 fun LoginScreen(
@@ -30,81 +31,106 @@ fun LoginScreen(
         mutableStateOf("")
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(28.dp),
-        verticalArrangement = Arrangement.Center
-    ) {
-        Text(
-            text = "FacilityHub",
-            style = MaterialTheme.typography.headlineLarge,
-            fontWeight = FontWeight.Bold
-        )
-
-        Text(
-            text = "Mantenimiento preventivo y cumplimiento documental"
-        )
-
-        Spacer(
-            modifier = Modifier.height(28.dp)
-        )
-
-        OutlinedTextField(
-            value = email,
-            onValueChange = { email = it },
-            label = {
-                Text("Correo")
-            },
-            modifier = Modifier.fillMaxWidth()
-        )
-
-        Spacer(
-            modifier = Modifier.height(12.dp)
-        )
-
-        OutlinedTextField(
-            value = password,
-            onValueChange = { password = it },
-            label = {
-                Text("Contraseña")
-            },
-            visualTransformation = PasswordVisualTransformation(),
-            modifier = Modifier.fillMaxWidth()
-        )
-
-        Spacer(
-            modifier = Modifier.height(20.dp)
-        )
-
-        Button(
-            onClick = {
-                vm.login(
-                    email = email,
-                    password = password,
-                    onSuccess = onLoggedIn
-                )
-            },
-            enabled = !vm.loading,
-            modifier = Modifier.fillMaxWidth()
+    // FH-009 / R1: solo cambia el aspecto (tema, logotipo, areas seguras y mensaje de error). El comportamiento del
+    // formulario se revisa en R2.
+    Surface(color = MaterialTheme.colorScheme.background, modifier = Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .safeDrawingPadding()
+                .padding(horizontal = 28.dp),
+            verticalArrangement = Arrangement.Center
         ) {
-            Text(
-                if (vm.loading) {
-                    "Accediendo..."
-                } else {
-                    "Iniciar sesión"
+            Surface(
+                color = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
+                shape = MaterialTheme.shapes.large,
+                modifier = Modifier.size(56.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(FhIcons.Edificio, contentDescription = null, modifier = Modifier.size(32.dp))
                 }
-            )
-        }
+            }
 
-        vm.error?.let { error ->
+            Spacer(modifier = Modifier.height(FhEspacio.m))
+
             Text(
-                text = error,
-                color = MaterialTheme.colorScheme.error,
-                modifier = Modifier.padding(top = 12.dp)
+                text = "FacilityHub",
+                style = MaterialTheme.typography.headlineLarge,
+                fontWeight = FontWeight.Bold
             )
+
+            Text(
+                text = "Mantenimiento preventivo y cumplimiento documental",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            Spacer(modifier = Modifier.height(FhEspacio.xl))
+
+            OutlinedTextField(
+                value = email,
+                onValueChange = { email = it },
+                label = { Text("Correo") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            Spacer(modifier = Modifier.height(FhEspacio.m))
+
+            OutlinedTextField(
+                value = password,
+                onValueChange = { password = it },
+                label = { Text("Contraseña") },
+                singleLine = true,
+                visualTransformation = PasswordVisualTransformation(),
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            Spacer(modifier = Modifier.height(FhEspacio.l))
+
+            Button(
+                onClick = {
+                    vm.login(
+                        email = email,
+                        password = password,
+                        onSuccess = onLoggedIn
+                    )
+                },
+                enabled = !vm.loading,
+                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+            ) {
+                Text(if (vm.loading) "Accediendo..." else "Iniciar sesión")
+            }
+
+            vm.error?.let { error ->
+                Spacer(modifier = Modifier.height(FhEspacio.m))
+                EstadoError(error)
+            }
         }
     }
+}
+
+
+/** Tarjeta de lista pulsable con titulo y lineas secundarias (centros, locales, obligaciones). */
+@Composable
+private fun TarjetaLista(titulo: String, onClick: (() -> Unit)?, contenido: @Composable ColumnScope.() -> Unit) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
+    ) {
+        Column(modifier = Modifier.padding(FhEspacio.l)) {
+            Text(text = titulo, style = MaterialTheme.typography.titleMedium)
+            contenido()
+        }
+    }
+}
+
+@Composable
+private fun TextoSecundario(texto: String) {
+    Text(texto, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
 }
 
 
@@ -124,58 +150,47 @@ fun CentrosScreen(
 
     ScreenScaffold(
         title = "Centros",
-        subtitle = "${vm.userName} · ${vm.role}",
+        subtitle = listOf(vm.userName, rolLegible(vm.role)).filter { it.isNotBlank() }.joinToString(" · "),
         onAction = onLogout,
         accionExtra = accionAlertas
     ) {
-        // FH-006 / P6-C3: accesos por rol (la navegacion no sustituye a los controles del backend).
+        // FH-006 / P6-C3: accesos por rol (la navegacion no sustituye a los controles del backend). La navegacion por rol
+        // se redisena en R3; aqui solo cambia el aspecto.
         if (vm.puedeGestionar) {
             // FH-006 / P6-D3-3: panel de Explotacion (ADMIN y EXPLOTACION).
-            FilledTonalButton(onClick = { onMenu("panel") }, modifier = Modifier.fillMaxWidth()) { Text("Panel de Explotación") }
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                FilledTonalButton(onClick = { onMenu("validaciones") }) { Text("Validaciones") }
-                OutlinedButton(onClick = { onMenu("proveedores") }) { Text("Proveedores") }
+            Button(onClick = { onMenu("panel") }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+                Icon(FhIcons.Vencido, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(FhEspacio.s))
+                Text("Panel de Explotación")
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                OutlinedButton(onClick = { onMenu("declaraciones") }) { Text("Declarados") }
-                OutlinedButton(onClick = { onMenu("solicitudes-gestion") }) { Text("Solicitudes") }
+            Spacer(Modifier.height(FhEspacio.s))
+            Row(horizontalArrangement = Arrangement.spacedBy(FhEspacio.s), modifier = Modifier.fillMaxWidth()) {
+                FilledTonalButton(onClick = { onMenu("validaciones") }, modifier = Modifier.weight(1f)) { Text("Validaciones") }
+                FilledTonalButton(onClick = { onMenu("proveedores") }, modifier = Modifier.weight(1f)) { Text("Proveedores") }
             }
+            Row(horizontalArrangement = Arrangement.spacedBy(FhEspacio.s), modifier = Modifier.fillMaxWidth()) {
+                OutlinedButton(onClick = { onMenu("declaraciones") }, modifier = Modifier.weight(1f)) { Text("Declarados") }
+                OutlinedButton(onClick = { onMenu("solicitudes-gestion") }, modifier = Modifier.weight(1f)) { Text("Solicitudes") }
+            }
+            Spacer(Modifier.height(FhEspacio.m))
         } else if (vm.esInquilino) {
-            FilledTonalButton(onClick = { onMenu("inquilino-obligaciones") }) { Text("Mis obligaciones y proveedores") }
+            Button(onClick = { onMenu("inquilino-obligaciones") }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+                Text("Mis obligaciones y proveedores")
+            }
+            Spacer(Modifier.height(FhEspacio.m))
         }
 
-        if (vm.loading) {
-            LinearProgressIndicator(
-                modifier = Modifier.fillMaxWidth()
-            )
-        }
+        EstadoCargando(vm.loading)
+        vm.error?.let { EstadoError(it, enabled = !vm.loading) { vm.cargarCentros() } }
+
+        SectionTitle("Centros comerciales")
 
         LazyColumn(
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+            verticalArrangement = Arrangement.spacedBy(FhEspacio.s)
         ) {
             items(vm.centros) { centro ->
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable {
-                            onCentro(centro)
-                        }
-                ) {
-                    Column(
-                        modifier = Modifier.padding(16.dp)
-                    ) {
-                        Text(
-                            text = centro.nombre,
-                            fontWeight = FontWeight.Bold
-                        )
-
-                        Text(
-                            text = listOfNotNull(
-                                centro.codigo,
-                                centro.ciudad
-                            ).joinToString(" · ")
-                        )
-                    }
+                TarjetaLista(centro.nombre, onClick = { onCentro(centro) }) {
+                    TextoSecundario(listOfNotNull(centro.codigo, centro.ciudad).joinToString(" · "))
                 }
             }
         }
@@ -200,39 +215,15 @@ fun LocalesScreen(
         subtitle = centroNombre,
         onAction = onBack
     ) {
-        if (vm.loading) {
-            LinearProgressIndicator(
-                modifier = Modifier.fillMaxWidth()
-            )
-        }
+        EstadoCargando(vm.loading)
+        vm.error?.let { EstadoError(it, enabled = !vm.loading) { vm.cargarLocales(centroId) } }
 
         LazyColumn(
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+            verticalArrangement = Arrangement.spacedBy(FhEspacio.s)
         ) {
             items(vm.locales) { local ->
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable {
-                            onLocal(local)
-                        }
-                ) {
-                    Column(
-                        modifier = Modifier.padding(16.dp)
-                    ) {
-                        Text(
-                            text = local.nombre ?: local.codigo,
-                            fontWeight = FontWeight.Bold
-                        )
-
-                        Text(
-                            text = listOfNotNull(
-                                local.codigo,
-                                local.planta,
-                                local.ubicacion
-                            ).joinToString(" · ")
-                        )
-                    }
+                TarjetaLista(local.nombre ?: local.codigo, onClick = { onLocal(local) }) {
+                    TextoSecundario(listOfNotNull(local.codigo, local.planta, local.ubicacion).joinToString(" · "))
                 }
             }
         }
@@ -256,75 +247,52 @@ fun LocalDetalleScreen(
     ScreenScaffold(
         title = localNombre,
         subtitle = "Detalle del local",
-        onAction = onBack
+        onAction = onBack,
+        scrollable = true
     ) {
-        if (vm.loading) {
-            LinearProgressIndicator(
-                modifier = Modifier.fillMaxWidth()
-            )
-        }
+        EstadoCargando(vm.loading)
+        vm.error?.let { EstadoError(it, enabled = !vm.loading) { vm.cargarDetalleLocal(localId) } }
 
         vm.inquilino?.let { inquilino ->
             SectionTitle("Inquilino actual")
-
             Text(
                 text = inquilino.nombreComercial ?: inquilino.razonSocial,
-                fontWeight = FontWeight.Bold
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.SemiBold
             )
-
-            Text(
-                text = inquilino.emailContacto.orEmpty()
-            )
-
-            Spacer(
-                modifier = Modifier.height(16.dp)
-            )
+            inquilino.emailContacto?.takeIf { it.isNotBlank() }?.let { TextoSecundario(it) }
+            Spacer(modifier = Modifier.height(FhEspacio.l))
         }
 
         SectionTitle("Instalaciones")
 
         vm.instalaciones.forEach { instalacion ->
-            Text(
-                text = "• ${instalacion.nombre} (${instalacion.estado})"
-            )
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 2.dp)) {
+                Text(instalacion.nombre, modifier = Modifier.weight(1f))
+                EstadoChip(etiquetaEstadoInstalacion(instalacion.estado),
+                    if (instalacion.estado == "ACTIVA") Tono.EXITO else Tono.NEUTRO)
+            }
         }
 
-        Spacer(
-            modifier = Modifier.height(16.dp)
-        )
+        Spacer(modifier = Modifier.height(FhEspacio.l))
 
         // FH-006 / P6-D3-4: historial del local para gestion (el INQUILINO accede desde «Mis obligaciones»).
         if (vm.puedeGestionar) {
-            OutlinedButton(onClick = onHistorial, modifier = Modifier.fillMaxWidth()) { Text("Historial de mantenimientos") }
-            Spacer(modifier = Modifier.height(8.dp))
+            OutlinedButton(onClick = onHistorial, modifier = Modifier.fillMaxWidth()) {
+                Icon(FhIcons.Historico, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(FhEspacio.s))
+                Text("Historial de mantenimientos")
+            }
+            Spacer(modifier = Modifier.height(FhEspacio.m))
         }
 
         SectionTitle("Obligaciones de mantenimiento")
 
         vm.obligaciones.forEach { obligacion ->
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 5.dp)
-                    .clickable {
-                        onObligacion(obligacion)
-                    }
-            ) {
-                Column(
-                    modifier = Modifier.padding(14.dp)
-                ) {
-                    Text(
-                        text = obligacion.tipoMantenimiento,
-                        fontWeight = FontWeight.Bold
-                    )
-
-                    Text(
-                        text = "Próxima fecha: ${obligacion.proximaFecha}"
-                    )
-
-                    Text(
-                        text = "Periodicidad: ${obligacion.periodicidadMeses} meses · ${obligacion.estado}"
-                    )
+            Box(Modifier.padding(vertical = FhEspacio.xs)) {
+                TarjetaLista(obligacion.tipoMantenimiento, onClick = { onObligacion(obligacion) }) {
+                    TextoSecundario("Próxima fecha: ${fechaCorta(obligacion.proximaFecha)}")
+                    TextoSecundario("Cada ${obligacion.periodicidadMeses} meses")
                 }
             }
         }
@@ -332,6 +300,7 @@ fun LocalDetalleScreen(
 }
 
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun MantenimientosScreen(
     vm: FacilityViewModel,
@@ -376,53 +345,38 @@ fun MantenimientosScreen(
         scrollable = true
     ) {
         Text(
-            text = "Próxima fecha: $proximaFecha"
+            text = "Próxima fecha: ${fechaCorta(proximaFecha)}",
+            style = MaterialTheme.typography.bodyLarge
         )
 
-        vm.error?.let { error ->
-            Text(
-                text = error,
-                color = MaterialTheme.colorScheme.error
-            )
-        }
+        EstadoCargando(vm.loading)
+        vm.error?.let { EstadoError(it) }
 
         // Crear ejecuciones solo para gestion (ADMIN/EXPLOTACION); el INQUILINO solo consulta.
         if (vm.puedeGestionar) {
-            Spacer(
-                modifier = Modifier.height(10.dp)
-            )
+            Spacer(modifier = Modifier.height(FhEspacio.m))
 
             SectionTitle("Nueva ejecución")
 
+            // R7 sustituira este campo por un selector de fecha; la API sigue recibiendo AAAA-MM-DD.
             OutlinedTextField(
                 value = fecha,
-                onValueChange = {
-                    fecha = it
-                },
-                label = {
-                    Text("Fecha (AAAA-MM-DD)")
-                },
+                onValueChange = { fecha = it },
+                label = { Text("Fecha (AAAA-MM-DD)") },
+                singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )
 
-            Spacer(
-                modifier = Modifier.height(8.dp)
-            )
+            Spacer(modifier = Modifier.height(FhEspacio.s))
 
             OutlinedTextField(
                 value = descripcion,
-                onValueChange = {
-                    descripcion = it
-                },
-                label = {
-                    Text("Descripción")
-                },
+                onValueChange = { descripcion = it },
+                label = { Text("Descripción") },
                 modifier = Modifier.fillMaxWidth()
             )
 
-            Spacer(
-                modifier = Modifier.height(10.dp)
-            )
+            Spacer(modifier = Modifier.height(FhEspacio.m))
 
             Button(
                 onClick = {
@@ -440,65 +394,61 @@ fun MantenimientosScreen(
             }
         }
 
-        Spacer(
-            modifier = Modifier.height(18.dp)
-        )
+        Spacer(modifier = Modifier.height(FhEspacio.l))
 
         SectionTitle("Histórico / programados")
 
         vm.mantenimientos.forEach { mantenimiento ->
             Card(
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 5.dp)
+                    .padding(vertical = FhEspacio.xs)
             ) {
                 Column(
-                    modifier = Modifier.padding(14.dp)
+                    modifier = Modifier.padding(FhEspacio.l)
                 ) {
                     Text(
-                        text = "${mantenimiento.fechaProgramada} · ${mantenimiento.estado}",
-                        fontWeight = FontWeight.Bold
+                        text = fechaCorta(mantenimiento.fechaProgramada),
+                        style = MaterialTheme.typography.titleMedium
                     )
+                    FilaChips {
+                        EstadoChip(etiquetaEstado(mantenimiento.estado) ?: mantenimiento.estado, tonoEstado(mantenimiento.estado))
+                    }
 
                     mantenimiento.descripcion?.let { descripcion ->
-                        Text(
-                            text = descripcion
-                        )
+                        Text(text = descripcion, modifier = Modifier.padding(top = FhEspacio.xs))
                     }
 
                     mantenimiento.fechaRealizacion?.let { fechaRealizacion ->
-                        Text(
-                            text = "Realizado: $fechaRealizacion"
-                        )
+                        TextoSecundario("Realizado: ${fechaCorta(fechaRealizacion)}")
                     }
 
                     // Iniciar solo para gestion. FH-006 / P6-C3: "Finalizar" se sustituye por el circuito de
                     // intervenciones (registro, envio y validacion); el cumplimiento lo declara la aprobacion.
-                    if (vm.puedeGestionar) {
-                        if (siguienteEstado(mantenimiento.estado) == "EN_PROCESO") OutlinedButton(
-                            onClick = {
-                                vm.cambiarEstadoMantenimiento(
-                                    mantenimiento = mantenimiento,
-                                    nuevoEstado = "EN_PROCESO",
-                                    localId = obligacion.localId
-                                )
-                            },
-                            enabled = !vm.loading
-                        ) {
-                            Text("Iniciar")
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(FhEspacio.xs)) {
+                        if (vm.puedeGestionar) {
+                            if (siguienteEstado(mantenimiento.estado) == "EN_PROCESO") OutlinedButton(
+                                onClick = {
+                                    vm.cambiarEstadoMantenimiento(
+                                        mantenimiento = mantenimiento,
+                                        nuevoEstado = "EN_PROCESO",
+                                        localId = obligacion.localId
+                                    )
+                                },
+                                enabled = !vm.loading
+                            ) {
+                                Text("Iniciar")
+                            }
+
+                            TextButton(onClick = { onIntervenciones(mantenimiento) }) {
+                                Text("Intervenciones y asignación")
+                            }
                         }
 
-                        TextButton(onClick = { onIntervenciones(mantenimiento) }) {
-                            Text("Intervenciones y asignación")
+                        TextButton(onClick = { onDocumentos(mantenimiento) }) {
+                            Text("Documentos")
                         }
-                    }
-
-                    TextButton(
-                        onClick = {
-                            onDocumentos(mantenimiento)
-                        }
-                    ) {
-                        Text("Documentos")
                     }
                 }
             }
@@ -556,78 +506,76 @@ fun DocumentosScreen(
 
             Text(
                 text = "PDF, JPEG o PNG · máximo 20 MB",
-                style = MaterialTheme.typography.bodySmall
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
 
-        if (vm.loading) {
-            LinearProgressIndicator(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 8.dp)
-            )
-        }
+        EstadoCargando(vm.loading)
+        vm.error?.let { EstadoError(it) }
 
-        vm.error?.let { error ->
-            Text(
-                text = error,
-                color = MaterialTheme.colorScheme.error
-            )
-        }
-
-        Spacer(
-            modifier = Modifier.height(18.dp)
-        )
+        Spacer(modifier = Modifier.height(FhEspacio.l))
 
         SectionTitle("Documentos adjuntos")
 
         if (vm.documentos.isEmpty() && !vm.loading && vm.error == null) {
-            Text("Sin documentos")
+            EstadoVacio("Sin documentos", FhIcons.Documento)
         }
 
         vm.documentos.forEach { documento ->
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 5.dp)
+            FilaDocumento(
+                nombre = documento.nombreOriginal,
+                detalle = listOfNotNull(
+                    documento.tipoDocumento?.let { etiquetaCategoria(it) },
+                    documento.fechaSubida?.let { "Subido ${fechaHora(it)}" }
+                ).joinToString(" · "),
+                chips = { EstadoChip(etiquetaRevision(documento.estadoRevision), tonoRevision(documento.estadoRevision)) }
             ) {
-                Column(
-                    modifier = Modifier.padding(14.dp)
-                ) {
-                    Text(
-                        text = documento.nombreOriginal,
-                        fontWeight = FontWeight.Bold
-                    )
-
-                    Text(
-                        text = "Estado: ${documento.estadoRevision}"
-                    )
-
-                    documento.fechaSubida?.let { fechaSubida ->
-                        Text(
-                            text = "Subido: ${fechaSubida.take(16).replace('T', ' ')}"
-                        )
-                    }
-
-                    documento.tipoDocumento?.let { tipo ->
-                        Text(
-                            text = "Tipo: $tipo"
-                        )
-                    }
-
-                    documento.observaciones?.let { observaciones ->
-                        Text(
-                            text = observaciones
-                        )
-                    }
-                }
+                documento.observaciones?.let { TextoSecundario(it) }
             }
         }
     }
 }
 
+internal fun tonoRevision(e: String?): Tono = when (e) {
+    "VALIDO" -> Tono.EXITO
+    "RECHAZADO" -> Tono.ERROR
+    "PENDIENTE" -> Tono.AVISO
+    else -> Tono.NEUTRO
+}
 
-private const val TITULO_MIS_TRABAJOS = "Mis trabajos"
+/** Fila de documento: icono, nombre en una linea, detalle, chips y accion opcional a la derecha. */
+@Composable
+internal fun FilaDocumento(
+    nombre: String,
+    detalle: String = "",
+    chips: (@Composable () -> Unit)? = null,
+    accion: (@Composable () -> Unit)? = null,
+    extra: @Composable ColumnScope.() -> Unit = {}
+) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+        modifier = Modifier.fillMaxWidth().padding(vertical = FhEspacio.xs)
+    ) {
+        Row(modifier = Modifier.padding(start = FhEspacio.m, end = FhEspacio.xs, top = FhEspacio.m, bottom = FhEspacio.m),
+            verticalAlignment = Alignment.CenterVertically) {
+            Surface(color = MaterialTheme.colorScheme.errorContainer, contentColor = MaterialTheme.colorScheme.onErrorContainer,
+                shape = MaterialTheme.shapes.small, modifier = Modifier.size(36.dp)) {
+                Box(contentAlignment = Alignment.Center) { Icon(FhIcons.Documento, contentDescription = null, modifier = Modifier.size(20.dp)) }
+            }
+            Spacer(Modifier.width(FhEspacio.m))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(nombre, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold,
+                    maxLines = 1, overflow = TextOverflow.MiddleEllipsis)
+                if (detalle.isNotBlank()) Text(detalle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (chips != null) FilaChips { chips() }
+                extra()
+            }
+            accion?.invoke()
+        }
+    }
+}
+
 
 // FH-006 / P6-B: trabajos asignados a la empresa del PROVEEDOR. Solo lectura: no hay botones de escritura;
 // las acciones futuras (P6-C) se mostraran unicamente si el backend las incluye en accionesPermitidas.
@@ -644,66 +592,38 @@ fun TrabajosScreen(
 
     ScreenScaffold(
         title = TITULO_MIS_TRABAJOS,
-        subtitle = "${vm.userName} · ${vm.role}",
+        subtitle = listOf(vm.userName, rolLegible(vm.role)).filter { it.isNotBlank() }.joinToString(" · "),
         onAction = onLogout,
         accionExtra = accionAlertas
     ) {
-        if (vm.loading) {
-            LinearProgressIndicator(
-                modifier = Modifier.fillMaxWidth()
-            )
-        }
-
-        vm.error?.let { error ->
-            Text(
-                text = error,
-                color = MaterialTheme.colorScheme.error
-            )
-        }
+        EstadoCargando(vm.loading)
+        vm.error?.let { EstadoError(it, enabled = !vm.loading) { vm.cargarTrabajos() } }
 
         if (!vm.loading && vm.trabajos.isEmpty() && vm.error == null) {
-            Text(
-                text = "No tienes trabajos asignados."
-            )
+            EstadoVacio("No tienes trabajos asignados.", FhIcons.Herramienta)
         }
 
         LazyColumn(
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+            verticalArrangement = Arrangement.spacedBy(FhEspacio.s)
         ) {
             items(vm.trabajos) { trabajo ->
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable {
-                            onTrabajo(trabajo)
+                TarjetaLista(trabajo.tipoMantenimiento, onClick = { onTrabajo(trabajo) }) {
+                    TextoSecundario(listOfNotNull(trabajo.centro, trabajo.local ?: "Zona común").joinToString(" · "))
+                    // FH-006 / P6-C3: estado de la ultima intervencion de su empresa, delante del estado del mantenimiento.
+                    FilaChips {
+                        if (trabajo.estadoValidacion != null) {
+                            EstadoChip(etiquetaValidacion(trabajo.estadoValidacion), tonoValidacion(trabajo.estadoValidacion),
+                                iconoValidacion(trabajo.estadoValidacion))
                         }
-                ) {
-                    Column(
-                        modifier = Modifier.padding(16.dp)
-                    ) {
-                        Text(
-                            text = "${trabajo.fechaProgramada} · ${trabajo.estado}",
-                            fontWeight = FontWeight.Bold
-                        )
-
-                        Text(
-                            text = trabajo.tipoMantenimiento
-                        )
-
-                        Text(
-                            text = listOfNotNull(
-                                trabajo.centro,
-                                trabajo.local ?: "Zona común"
-                            ).joinToString(" · "),
-                            style = MaterialTheme.typography.bodySmall
-                        )
-
-                        // FH-006 / P6-C3: estado de la ultima intervencion de su empresa.
-                        Text(
-                            text = "Intervención: ${etiquetaValidacion(trabajo.estadoValidacion)}",
-                            style = MaterialTheme.typography.bodySmall
-                        )
+                        EstadoChip(etiquetaEstado(trabajo.estado) ?: trabajo.estado, tonoEstado(trabajo.estado))
                     }
+                    Text(
+                        text = "Programado ${fechaCorta(trabajo.fechaProgramada)}" +
+                            if (trabajo.estadoValidacion == null) " · ${etiquetaValidacion(null)}" else "",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = FhEspacio.xs)
+                    )
                 }
             }
         }
@@ -729,41 +649,28 @@ fun TrabajoDetalleScreen(
         onAction = onBack,
         scrollable = true
     ) {
-        if (vm.loading) {
-            LinearProgressIndicator(
-                modifier = Modifier.fillMaxWidth()
-            )
-        }
-
-        vm.error?.let { error ->
-            Text(
-                text = error,
-                color = MaterialTheme.colorScheme.error
-            )
-        }
+        EstadoCargando(vm.loading)
+        vm.error?.let { EstadoError(it, enabled = !vm.loading) { vm.cargarTrabajo(mantenimientoId) } }
 
         vm.trabajo?.let { trabajo ->
             SectionTitle("Datos del trabajo")
+            FilaChips { EstadoChip(etiquetaEstado(trabajo.estado) ?: trabajo.estado, tonoEstado(trabajo.estado)) }
+            DatoEtiquetado("Fecha programada", fechaCorta(trabajo.fechaProgramada))
+            trabajo.descripcion?.let { DatoEtiquetado("Descripción", it) }
 
-            Text(text = "Fecha programada: ${trabajo.fechaProgramada}")
-            Text(text = "Estado: ${trabajo.estado}")
-            trabajo.descripcion?.let { Text(text = "Descripción: $it") }
-
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(FhEspacio.m))
             SectionTitle("Ubicación")
+            DatoEtiquetado("Centro", trabajo.centro)
+            DatoEtiquetado("Local", trabajo.local ?: "Zona común")
+            trabajo.instalacion?.let { DatoEtiquetado("Instalación", it) }
 
-            Text(text = "Centro: ${trabajo.centro}")
-            Text(text = "Local: ${trabajo.local ?: "Zona común"}")
-            trabajo.instalacion?.let { Text(text = "Instalación: $it") }
-
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(FhEspacio.m))
             SectionTitle("Asignación")
+            DatoEtiquetado("Responsable", trabajo.responsable)
+            trabajo.tecnicoAsignado?.let { DatoEtiquetado("Técnico", it) }
+            trabajo.asignadoAt?.let { DatoEtiquetado("Asignado", fechaHora(it)) }
 
-            Text(text = "Responsable contractual: ${trabajo.responsable}")
-            trabajo.tecnicoAsignado?.let { Text(text = "Técnico asignado: $it") }
-            trabajo.asignadoAt?.let { Text(text = "Asignado: ${it.take(16).replace('T', ' ')}") }
-
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(FhEspacio.m))
 
             // FH-006 / P6-C3: intervenciones propias; registrar solo si el backend lo permite.
             if (flujo != null) {
@@ -778,90 +685,12 @@ fun TrabajoDetalleScreen(
     }
 }
 
-
+/** Par etiqueta/valor alineado (sustituye a "Etiqueta: valor" en texto corrido). */
 @Composable
-internal fun ScreenScaffold(
-    title: String,
-    subtitle: String,
-    onAction: () -> Unit,
-    scrollable: Boolean = false,
-    actionLabel: String? = null,
-    accionExtra: (@Composable () -> Unit)? = null,
-    content: @Composable ColumnScope.() -> Unit
-) {
-    Scaffold(
-        topBar = {
-            Surface(
-                shadowElevation = 3.dp
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        // FH-006 / P6-C3: la barra no se superpone a la barra de estado (pantalla edge-to-edge).
-                        .statusBarsPadding()
-                        .padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Text(
-                            text = title,
-                            fontWeight = FontWeight.Bold
-                        )
-
-                        Text(
-                            text = subtitle,
-                            style = MaterialTheme.typography.bodySmall
-                        )
-                    }
-
-                    // FH-006 / P6-D1: acceso a «Mis notificaciones» en las pantallas raiz.
-                    accionExtra?.invoke()
-
-                    TextButton(
-                        onClick = onAction
-                    ) {
-                        Text(
-                            // Pantallas raiz por rol (Centros, Mis trabajos): "Salir"; el resto: "Volver".
-                            actionLabel ?: if (title == "Centros" || title == TITULO_MIS_TRABAJOS) {
-                                "Salir"
-                            } else {
-                                "Volver"
-                            }
-                        )
-                    }
-                }
-            }
-        }
-    ) { paddingValues ->
-
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .padding(16.dp)
-                .then(
-                    if (scrollable) {
-                        Modifier.verticalScroll(rememberScrollState())
-                    } else {
-                        Modifier
-                    }
-                ),
-            content = content
-        )
+internal fun DatoEtiquetado(etiqueta: String, valor: String) {
+    Row(modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
+        Text(etiqueta, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.widthIn(min = 112.dp, max = 140.dp).padding(end = FhEspacio.s))
+        Text(valor, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
     }
-}
-
-
-@Composable
-internal fun SectionTitle(
-    text: String
-) {
-    Text(
-        text = text,
-        style = MaterialTheme.typography.titleMedium,
-        fontWeight = FontWeight.Bold,
-        modifier = Modifier.padding(bottom = 6.dp)
-    )
 }

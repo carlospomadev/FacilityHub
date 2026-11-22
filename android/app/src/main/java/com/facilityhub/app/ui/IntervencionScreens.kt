@@ -12,6 +12,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.facilityhub.app.data.*
+import com.facilityhub.app.ui.theme.FhEspacio
+import com.facilityhub.app.ui.theme.FhIcons
 
 // FH-006 / P6-C3: intervenciones (PROVEEDOR y gestion) y validacion (ADMIN/EXPLOTACION). Cada boton aparece solo si
 // la accion esta en accionesPermitidas; el backend vuelve a comprobarlo todo (403/404/409).
@@ -24,6 +26,14 @@ internal fun etiquetaResultado(r: String?) = when (r) {
     else -> r
 }
 
+internal fun etiquetaAccionValidacion(a: String?) = when (a) {
+    "APROBAR" -> "Aprobada"
+    "SOLICITAR_CORRECCION" -> "Corrección solicitada"
+    "CERRAR_SIN_CUMPLIMIENTO" -> "Cerrada sin cumplimiento"
+    null -> ""
+    else -> a.lowercase().replace('_', ' ').replaceFirstChar { it.uppercase() }
+}
+
 internal fun etiquetaValidacion(e: String?) = when (e) {
     "BORRADOR" -> "Borrador"
     "PENDIENTE_VALIDACION" -> "Pendiente de validación"
@@ -34,27 +44,32 @@ internal fun etiquetaValidacion(e: String?) = when (e) {
     else -> e
 }
 
-internal fun fechaHora(valor: String?) = valor?.take(16)?.replace('T', ' ').orEmpty()
-
 @Composable
 internal fun MensajesFlujo(flujo: FlujoViewModel) {
-    if (flujo.loading) LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-    flujo.error?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(vertical = 4.dp)) }
-    flujo.aviso?.let { Text(it, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(vertical = 4.dp)) }
+    EstadoCargando(flujo.loading)
+    flujo.error?.let { EstadoError(it) }
+    flujo.aviso?.let { Mensaje(it, Tono.EXITO) }
 }
 
 // Lista de intervenciones de un mantenimiento (proveedor: solo las de su empresa; gestion: todas).
 @Composable
 internal fun ListaIntervenciones(intervenciones: List<IntervencionDto>, onIntervencion: (Long) -> Unit) {
     if (intervenciones.isEmpty()) {
-        Text("Sin intervenciones registradas.", style = MaterialTheme.typography.bodySmall)
+        EstadoVacio("Sin intervenciones registradas.", FhIcons.Herramienta)
     }
     intervenciones.forEach { i ->
-        Card(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).clickable { onIntervencion(i.id) }) {
-            Column(modifier = Modifier.padding(12.dp)) {
-                Text("${etiquetaValidacion(i.estadoValidacion)} · envío ${i.numeroEnvio}", fontWeight = FontWeight.Bold)
-                Text("${i.fechaEjecucion ?: "Sin fecha"} · ${etiquetaResultado(i.resultado)}")
-                Text(listOfNotNull(i.proveedor, i.tecnico).joinToString(" · "), style = MaterialTheme.typography.bodySmall)
+        Card(
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+            modifier = Modifier.fillMaxWidth().padding(vertical = FhEspacio.xs).clickable { onIntervencion(i.id) }
+        ) {
+            Column(modifier = Modifier.padding(FhEspacio.m)) {
+                FilaChips(Modifier.padding(bottom = FhEspacio.xs)) {
+                    EstadoChip(etiquetaValidacion(i.estadoValidacion), tonoValidacion(i.estadoValidacion), iconoValidacion(i.estadoValidacion))
+                }
+                Text("${i.fechaEjecucion?.let { fechaCorta(it) } ?: "Sin fecha"} · ${etiquetaResultado(i.resultado)} · envío ${i.numeroEnvio}",
+                    style = MaterialTheme.typography.bodyMedium)
+                Text(listOfNotNull(i.proveedor, i.tecnico).joinToString(" · "), style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }
@@ -118,11 +133,18 @@ fun IntervencionScreen(
         MensajesFlujo(flujo)
         if (i == null) return@ScreenScaffold
 
+        FilaChips(Modifier.padding(bottom = FhEspacio.s)) {
+            EstadoChip(etiquetaValidacion(i.estadoValidacion), tonoValidacion(i.estadoValidacion), iconoValidacion(i.estadoValidacion))
+            if (i.resultado != null) EstadoChip(etiquetaResultado(i.resultado),
+                if (i.resultado == "CONFORME") Tono.EXITO else Tono.AVISO, if (i.resultado == "CONFORME") FhIcons.Hecho else null)
+            if (i.ejecucionAnticipada) EstadoChip("Ejecución anticipada", Tono.NEUTRO)
+        }
         SectionTitle("Datos")
-        Text("Proveedor: ${i.proveedor.orEmpty()}${i.tecnico?.let { " · $it" }.orEmpty()}")
-        Text("Origen: ${if (i.origen == "REGISTRO_GESTION") "Registro de gestión" else "Proveedor"} · registrada por ${i.registradaPor.orEmpty()} el ${fechaHora(i.registradaAt)}")
-        Text("Envío nº ${i.numeroEnvio}${i.enviadaAt?.let { " · enviada ${fechaHora(it)} por ${i.enviadaPor.orEmpty()}" }.orEmpty()}")
-        if (i.ejecucionAnticipada) Text("Ejecución anticipada respecto a la fecha programada", style = MaterialTheme.typography.bodySmall)
+        DatoEtiquetado("Proveedor", i.proveedor.orEmpty())
+        i.tecnico?.let { DatoEtiquetado("Técnico", it) }
+        DatoEtiquetado("Origen", (if (i.origen == "REGISTRO_GESTION") "Registro de gestión" else "Proveedor") +
+            " · ${i.registradaPor.orEmpty()}, ${fechaHora(i.registradaAt)}")
+        DatoEtiquetado("Envío", "nº ${i.numeroEnvio}${i.enviadaAt?.let { " · ${fechaHora(it)} por ${i.enviadaPor.orEmpty()}" }.orEmpty()}")
 
         if (acciones.contains(ACCION_EDITAR_INTERVENCION)) {
             Spacer(Modifier.height(8.dp))
@@ -147,9 +169,10 @@ fun IntervencionScreen(
             }
             Text("Al enviar se guardan también los cambios del formulario.", style = MaterialTheme.typography.bodySmall)
         } else {
-            Text("Fecha: ${i.fechaEjecucion ?: "—"} · Resultado: ${etiquetaResultado(i.resultado)}")
-            i.actuaciones?.let { Text("Actuaciones: $it") }
-            i.incidencias?.let { Text("Incidencias / motivo: $it") }
+            DatoEtiquetado("Ejecución", i.fechaEjecucion?.let { fechaCorta(it) } ?: "—")
+            DatoEtiquetado("Resultado", etiquetaResultado(i.resultado))
+            i.actuaciones?.let { DatoEtiquetado("Actuaciones", it) }
+            i.incidencias?.let { DatoEtiquetado("Incidencias", it) }
         }
 
         Spacer(Modifier.height(12.dp))
@@ -166,20 +189,20 @@ fun IntervencionScreen(
             ) { Text("Adjuntar archivo") }
             Text("PDF, JPEG o PNG · máximo 20 MB", style = MaterialTheme.typography.bodySmall)
         }
-        if (i.documentos.isNullOrEmpty()) Text("Sin documentos.", style = MaterialTheme.typography.bodySmall)
+        if (i.documentos.isNullOrEmpty()) EstadoVacio("Sin documentos.", FhIcons.Documento)
         i.documentos.orEmpty().forEach { d ->
-            Card(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-                Row(modifier = Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(d.nombreOriginal, fontWeight = FontWeight.Bold)
-                        // La visibilidad se muestra tal cual: un documento INTERNO nunca se presenta como compartido.
-                        Text("${d.categoria ?: "—"} · ${d.estadoRevision} · ${if (d.visibilidad == "COMPARTIDO") "Compartido con el inquilino" else "Interno"}",
-                            style = MaterialTheme.typography.bodySmall)
-                    }
-                    TextButton(onClick = { aDescargar = d; guardar.launch(d.nombreOriginal) }, enabled = !flujo.loading) { Text("Descargar") }
-                }
+            // La visibilidad se muestra tal cual: un documento INTERNO nunca se presenta como compartido.
+            FilaDocumento(
+                nombre = d.nombreOriginal,
+                chips = {
+                    EstadoChip(etiquetaCategoria(d.categoria), if (d.categoria == "CERTIFICADO") Tono.PRIMARIO else Tono.NEUTRO)
+                    EstadoChip(etiquetaRevision(d.estadoRevision), tonoRevision(d.estadoRevision))
+                    EstadoChip(etiquetaVisibilidad(d.visibilidad), if (d.visibilidad == "COMPARTIDO") Tono.EXITO else Tono.NEUTRO)
+                },
+                accion = { TextButton(onClick = { aDescargar = d; guardar.launch(d.nombreOriginal) }, enabled = !flujo.loading) { Text("Descargar") } }
+            ) {
                 if (acciones.contains(ACCION_APROBAR) && d.categoria == "CERTIFICADO") {
-                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 6.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
                         Checkbox(checked = d.id in compartir, onCheckedChange = { marcado -> compartir = if (marcado) compartir + d.id else compartir - d.id })
                         Text("Compartir con el inquilino al aprobar", style = MaterialTheme.typography.bodySmall)
                     }
@@ -191,8 +214,12 @@ fun IntervencionScreen(
             Spacer(Modifier.height(12.dp))
             SectionTitle("Historial de validación")
             i.validaciones.orEmpty().forEach { v ->
-                Text("${fechaHora(v.fecha)} · envío ${v.numeroEnvio} · ${v.accion} · ${v.validadaPor.orEmpty()}", fontWeight = FontWeight.Bold)
-                v.comentario?.let { Text(it) }
+                Column(Modifier.padding(vertical = FhEspacio.xs)) {
+                    Text("${etiquetaAccionValidacion(v.accion)} · envío ${v.numeroEnvio}", style = MaterialTheme.typography.titleSmall)
+                    Text("${fechaHora(v.fecha)} · ${v.validadaPor.orEmpty()}", style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    v.comentario?.let { Text("«$it»", style = MaterialTheme.typography.bodyMedium) }
+                }
             }
         }
 
@@ -203,7 +230,12 @@ fun IntervencionScreen(
             OutlinedTextField(comentario, { comentario = it }, label = { Text("Comentario (obligatorio para corregir o cerrar)") },
                 modifier = Modifier.fillMaxWidth(), minLines = 2)
             if (ACCION_APROBAR in accionesValidacion) {
-                Text("Los certificados solo se comparten si los marcas; el resto queda interno.", style = MaterialTheme.typography.bodySmall)
+                Text("Los certificados solo se comparten si los marcas; el resto queda interno.", style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            if (ACCION_SOLICITAR_CORRECCION in accionesValidacion && comentario.isBlank()) {
+                Text("Para pedir corrección o cerrar, escribe un comentario.", style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = 6.dp)) {
                 if (ACCION_APROBAR in accionesValidacion) Button(onClick = { confirmar = ACCION_APROBAR }, enabled = !flujo.loading) { Text("Aprobar") }
@@ -261,11 +293,11 @@ fun MantenimientoGestionScreen(
         SectionTitle("Asignación")
         val a = flujo.asignacion
         if (a != null) {
-            Text("Proveedor: ${a.proveedor}")
-            a.tecnico?.let { Text("Técnico: $it") }
-            Text("Asignado: ${fechaHora(a.asignadoAt)}", style = MaterialTheme.typography.bodySmall)
+            DatoEtiquetado("Proveedor", a.proveedor)
+            a.tecnico?.let { DatoEtiquetado("Técnico", it) }
+            DatoEtiquetado("Asignado", fechaHora(a.asignadoAt))
         } else if (flujo.asignacionConsultada) {
-            Text("Sin proveedor asignado.")
+            FilaChips { EstadoChip("Sin proveedor asignado", Tono.AVISO, FhIcons.SinAsignar) }
         }
         // FH-006 / P6-C3: asignar o reasignar (gestion). En obligaciones del inquilino el backend lo impide salvo el
         // proveedor aceptado (403/409 con su mensaje).
@@ -311,14 +343,22 @@ fun BandejaValidacionScreen(flujo: FlujoViewModel, onIntervencion: (Long) -> Uni
     LaunchedEffect(Unit) { flujo.limpiarMensajes(); flujo.cargarPendientes() }
     ScreenScaffold(title = "Pendientes de validación", subtitle = "Explotación", onAction = onBack, scrollable = true) {
         MensajesFlujo(flujo)
-        if (!flujo.loading && flujo.pendientes.isEmpty() && flujo.error == null) Text("No hay intervenciones pendientes.")
+        if (!flujo.loading && flujo.pendientes.isEmpty() && flujo.error == null) EstadoVacio("No hay intervenciones pendientes.", FhIcons.Hecho)
         flujo.pendientes.forEach { p ->
-            Card(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).clickable { onIntervencion(p.id) }) {
-                Column(modifier = Modifier.padding(12.dp)) {
-                    Text("${p.tipoMantenimiento} · ${etiquetaResultado(p.resultado)}", fontWeight = FontWeight.Bold)
-                    Text(listOfNotNull(p.centro, p.local ?: "Zona común", p.proveedor).joinToString(" · "))
-                    Text("Ejecución ${p.fechaEjecucion ?: "—"} · envío ${p.numeroEnvio} · responsable ${p.responsable}" +
-                        if (p.ejecucionAnticipada) " · anticipada" else "", style = MaterialTheme.typography.bodySmall)
+            Card(
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+                modifier = Modifier.fillMaxWidth().padding(vertical = FhEspacio.xs).clickable { onIntervencion(p.id) }
+            ) {
+                Column(modifier = Modifier.padding(FhEspacio.m)) {
+                    Text(p.tipoMantenimiento, style = MaterialTheme.typography.titleSmall)
+                    Text(listOfNotNull(p.centro, p.local ?: "Zona común", p.proveedor).joinToString(" · "),
+                        style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    FilaChips {
+                        EstadoChip(etiquetaResultado(p.resultado), if (p.resultado == "CONFORME") Tono.EXITO else Tono.AVISO)
+                        if (p.ejecucionAnticipada) EstadoChip("Anticipada", Tono.NEUTRO)
+                    }
+                    Text("Ejecución ${p.fechaEjecucion?.let { fechaCorta(it) } ?: "—"} · envío ${p.numeroEnvio} · responsable ${p.responsable}",
+                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         }
@@ -331,11 +371,17 @@ fun ProveedoresScreen(flujo: FlujoViewModel, onBack: () -> Unit) {
     ScreenScaffold(title = "Proveedores", subtitle = "Consulta", onAction = onBack, scrollable = true) {
         MensajesFlujo(flujo)
         flujo.proveedores.forEach { p ->
-            Card(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-                Column(modifier = Modifier.padding(12.dp)) {
-                    Text(p.razonSocial, fontWeight = FontWeight.Bold)
-                    Text(listOfNotNull(p.cif, if (p.activo) "Activo" else "De baja").joinToString(" · "))
-                    Text("Técnicos: ${p.tecnicos.orEmpty().count { it.activo }} activos", style = MaterialTheme.typography.bodySmall)
+            Card(
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+                modifier = Modifier.fillMaxWidth().padding(vertical = FhEspacio.xs)
+            ) {
+                Column(modifier = Modifier.padding(FhEspacio.m)) {
+                    Text(p.razonSocial, style = MaterialTheme.typography.titleSmall)
+                    p.cif?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                    FilaChips {
+                        EstadoChip(if (p.activo) "Activo" else "De baja", if (p.activo) Tono.EXITO else Tono.NEUTRO)
+                        EstadoChip("Técnicos: ${p.tecnicos.orEmpty().count { it.activo }} activos", Tono.NEUTRO)
+                    }
                 }
             }
         }
