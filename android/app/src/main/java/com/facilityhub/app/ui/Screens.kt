@@ -17,7 +17,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.autofill.ContentType
 import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.contentType
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -605,28 +607,57 @@ internal fun FilaDocumento(
     detalle: String = "",
     chips: (@Composable () -> Unit)? = null,
     accion: (@Composable () -> Unit)? = null,
+    // FH-009 / R5: controles a todo el ancho de la tarjeta, bajo el documento (p. ej. «Compartir con el inquilino»).
+    pie: (@Composable ColumnScope.() -> Unit)? = null,
     extra: @Composable ColumnScope.() -> Unit = {}
 ) {
+    // FH-009 / R5: con fuente grande la accion (Descargar) baja bajo el documento en lugar de estrechar su columna.
+    val vertical = LocalDensity.current.fontScale >= 1.3f
+    val ext = nombre.substringAfterLast('.', "").lowercase()
+    val imagen = ext in setOf("jpg", "jpeg", "png")
     Card(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
         modifier = Modifier.fillMaxWidth().padding(vertical = FhEspacio.xs)
     ) {
-        Row(modifier = Modifier.padding(start = FhEspacio.m, end = FhEspacio.xs, top = FhEspacio.m, bottom = FhEspacio.m),
-            verticalAlignment = Alignment.CenterVertically) {
-            Surface(color = MaterialTheme.colorScheme.errorContainer, contentColor = MaterialTheme.colorScheme.onErrorContainer,
-                shape = MaterialTheme.shapes.small, modifier = Modifier.size(36.dp)) {
-                Box(contentAlignment = Alignment.Center) { Icon(FhIcons.Documento, contentDescription = null, modifier = Modifier.size(20.dp)) }
+        Column(Modifier.padding(start = FhEspacio.m, end = FhEspacio.xs, top = FhEspacio.m, bottom = FhEspacio.s)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                // Icono segun el tipo de archivo (PDF o imagen), con descripcion accesible.
+                val (fondo, contenido) = coloresTono(if (imagen) Tono.INFO else Tono.ERROR)
+                Surface(color = fondo, contentColor = contenido, shape = MaterialTheme.shapes.small, modifier = Modifier.size(36.dp)) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(if (imagen) FhIcons.Imagen else FhIcons.Documento,
+                            contentDescription = when { imagen -> "Imagen"; ext == "pdf" -> "Archivo PDF"; else -> "Archivo" },
+                            modifier = Modifier.size(20.dp))
+                    }
+                }
+                Spacer(Modifier.width(FhEspacio.m))
+                Column(modifier = Modifier.weight(1f).padding(end = FhEspacio.s)) {
+                    // Nombre en una linea con puntos suspensivos en medio (conserva extension y fecha); el texto accesible
+                    // es siempre el nombre completo. Con fuente grande se permiten varias lineas.
+                    Text(nombre, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold,
+                        maxLines = if (vertical) 3 else 1, overflow = if (vertical) TextOverflow.Ellipsis else TextOverflow.MiddleEllipsis)
+                    if (detalle.isNotBlank()) Text(detalle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    if (chips != null) FilaChips { chips() }
+                    extra()
+                }
+                if (!vertical) accion?.invoke()
             }
-            Spacer(Modifier.width(FhEspacio.m))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(nombre, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold,
-                    maxLines = 1, overflow = TextOverflow.MiddleEllipsis)
-                if (detalle.isNotBlank()) Text(detalle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                if (chips != null) FilaChips { chips() }
-                extra()
-            }
-            accion?.invoke()
+            if (vertical && accion != null) Box(Modifier.fillMaxWidth().padding(start = 36.dp + FhEspacio.s)) { accion() }
+            if (pie != null) Column(Modifier.fillMaxWidth().padding(end = FhEspacio.s), content = pie)
         }
+    }
+}
+
+/** FH-009 / R5: boton «Descargar» con icono; la descripcion accesible incluye el nombre del documento. */
+@Composable
+internal fun BotonDescargar(nombre: String, enabled: Boolean, onClick: () -> Unit) {
+    TextButton(
+        onClick = onClick, enabled = enabled,
+        modifier = Modifier.heightIn(min = 48.dp).semantics { onClick(label = "Descargar $nombre") { onClick(); true } }
+    ) {
+        Icon(FhIcons.Descargar, contentDescription = null, modifier = Modifier.size(18.dp))
+        Spacer(Modifier.width(FhEspacio.xs))
+        Text("Descargar")
     }
 }
 
@@ -740,9 +771,20 @@ fun TrabajoDetalleScreen(
 /** Par etiqueta/valor alineado (sustituye a "Etiqueta: valor" en texto corrido). */
 @Composable
 internal fun DatoEtiquetado(etiqueta: String, valor: String) {
-    Row(modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
-        Text(etiqueta, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.widthIn(min = 112.dp, max = 140.dp).padding(end = FhEspacio.s))
-        Text(valor, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+    // FH-009 / R5: etiqueta y valor se leen juntos con TalkBack; con fuente grande la etiqueta va encima del valor para no
+    // partir palabras en una columna estrecha.
+    val apilado = LocalDensity.current.fontScale >= 1.3f
+    val m = Modifier.fillMaxWidth().padding(vertical = 2.dp).semantics(mergeDescendants = true) {}
+    if (apilado) {
+        Column(m) {
+            Text(etiqueta, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(valor, style = MaterialTheme.typography.bodyMedium)
+        }
+    } else {
+        Row(m) {
+            Text(etiqueta, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.widthIn(min = 112.dp, max = 140.dp).padding(end = FhEspacio.s))
+            Text(valor, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+        }
     }
 }

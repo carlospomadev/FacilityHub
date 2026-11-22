@@ -4,11 +4,18 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.facilityhub.app.data.*
@@ -112,10 +119,14 @@ fun IntervencionScreen(
     var categoria by remember { mutableStateOf("EVIDENCIA") }
     var confirmarEnvio by remember { mutableStateOf(false) }
 
-    // Validacion
+    // Validacion. El comentario y la seleccion de certificados solo se reinician cuando cambia la version de la
+    // intervencion (operacion correcta): tras un error de servidor o una cancelacion se conservan.
     var comentario by remember(i?.id, i?.version) { mutableStateOf("") }
     var compartir by remember(i?.id, i?.version) { mutableStateOf(setOf<Long>()) }
     var confirmar by remember { mutableStateOf<String?>(null) }
+    // Se ha confirmado una validacion en esta pantalla: su resultado (error o exito) se muestra en la barra fija, junto a
+    // donde el usuario ha pulsado, aunque la intervencion ya no admita mas acciones.
+    var validacionLanzada by remember(intervencionId) { mutableStateOf(false) }
 
     var selectorAbierto by remember { mutableStateOf(false) }
     val selector = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -129,8 +140,37 @@ fun IntervencionScreen(
         if (uri != null && d != null) flujo.descargarDocumentoIntervencion(intervencionId, d.id, uri)
     }
 
-    ScreenScaffold(title = "Intervención", subtitle = i?.let { etiquetaValidacion(it.estadoValidacion) } ?: "", onAction = onBack, scrollable = true) {
-        MensajesFlujo(flujo)
+    // Acciones de validacion: solo las que el backend incluye en accionesPermitidas (no se crean condiciones nuevas).
+    val accionesValidacion = if (acciones.contains(ACCION_EDITAR_INTERVENCION)) emptyList()
+        else listOf(ACCION_APROBAR, ACCION_SOLICITAR_CORRECCION, ACCION_CERRAR_SIN_CUMPLIMIENTO).filter { it in acciones }
+    val certificados = i?.documentos.orEmpty().filter { it.categoria == "CERTIFICADO" }
+    val conBarra = i != null && (accionesValidacion.isNotEmpty() ||
+        (validacionLanzada && (flujo.error != null || flujo.aviso != null || flujo.loading)))
+
+    ScreenScaffold(
+        title = "Intervención",
+        subtitle = i?.let { etiquetaValidacion(it.estadoValidacion) } ?: "",
+        onAction = onBack,
+        scrollable = true,
+        // FH-009 / R5: acciones fijas encima de la barra de gestos (siempre visibles al desplazarse).
+        barraInferior = if (conBarra) {
+            {
+                // Mensajes de la operacion (carga, error, exito) junto a las acciones, siempre visibles.
+                EstadoCargando(flujo.loading)
+                flujo.error?.let { EstadoError(it) }
+                flujo.aviso?.let { Mensaje(it, Tono.EXITO) }
+                if (accionesValidacion.isNotEmpty()) BarraValidacion(
+                    acciones = accionesValidacion,
+                    hayComentario = comentario.isNotBlank(),
+                    hayCertificados = certificados.isNotEmpty(),
+                    ocupado = flujo.loading,
+                    onAccion = { confirmar = it }
+                )
+            }
+        } else null
+    ) {
+        // Con barra fija, los mensajes van en ella (no arriba, fuera de la vista de quien ha pulsado una accion).
+        if (!conBarra) MensajesFlujo(flujo)
         if (i == null) return@ScreenScaffold
 
         FilaChips(Modifier.padding(bottom = FhEspacio.s)) {
@@ -139,14 +179,14 @@ fun IntervencionScreen(
                 if (i.resultado == "CONFORME") Tono.EXITO else Tono.AVISO, if (i.resultado == "CONFORME") FhIcons.Hecho else null)
             if (i.ejecucionAnticipada) EstadoChip("Ejecución anticipada", Tono.NEUTRO)
         }
+        // Datos como tabla clave/valor (sin parrafos con varios datos).
         SectionTitle("Datos")
-        DatoEtiquetado("Proveedor", i.proveedor.orEmpty())
-        i.tecnico?.let { DatoEtiquetado("Técnico", it) }
-        DatoEtiquetado("Origen", (if (i.origen == "REGISTRO_GESTION") "Registro de gestión" else "Proveedor") +
-            " · ${i.registradaPor.orEmpty()}, ${fechaHora(i.registradaAt)}")
-        DatoEtiquetado("Envío", "nº ${i.numeroEnvio}${i.enviadaAt?.let { " · ${fechaHora(it)} por ${i.enviadaPor.orEmpty()}" }.orEmpty()}")
+        DatoEtiquetado("Estado", etiquetaValidacion(i.estadoValidacion))
+        DatoEtiquetado("Proveedor", i.proveedor ?: "—")
+        DatoEtiquetado("Técnico", i.tecnico ?: "—")
 
         if (acciones.contains(ACCION_EDITAR_INTERVENCION)) {
+            DatoEtiquetado("Envío", "nº ${i.numeroEnvio}")
             Spacer(Modifier.height(8.dp))
             OutlinedTextField(fecha, { fecha = it }, label = { Text("Fecha de ejecución o intento (AAAA-MM-DD)") }, modifier = Modifier.fillMaxWidth())
             OutlinedTextField(actuaciones, { actuaciones = it }, label = { Text("Actuaciones realizadas") }, modifier = Modifier.fillMaxWidth(), minLines = 2)
@@ -169,14 +209,23 @@ fun IntervencionScreen(
             }
             Text("Al enviar se guardan también los cambios del formulario.", style = MaterialTheme.typography.bodySmall)
         } else {
-            DatoEtiquetado("Ejecución", i.fechaEjecucion?.let { fechaCorta(it) } ?: "—")
             DatoEtiquetado("Resultado", etiquetaResultado(i.resultado))
+            DatoEtiquetado("Ejecución", i.fechaEjecucion?.let { fechaCorta(it) } ?: "—")
+            DatoEtiquetado("Enviada", i.enviadaAt?.let { fechaHora(it) } ?: "Sin enviar")
+            if (i.numeroEnvio > 0) DatoEtiquetado("Nº de envío", i.numeroEnvio.toString())
+            i.enviadaPor?.let { DatoEtiquetado("Enviada por", it) }
             i.actuaciones?.let { DatoEtiquetado("Actuaciones", it) }
-            i.incidencias?.let { DatoEtiquetado("Incidencias", it) }
+            i.incidencias?.takeIf { it.isNotBlank() }?.let { DatoEtiquetado("Incidencias", it) }
+            DatoEtiquetado("Registro", (if (i.origen == "REGISTRO_GESTION") "Registro de gestión" else "Proveedor") +
+                i.registradaPor?.let { " · $it" }.orEmpty())
         }
 
         Spacer(Modifier.height(12.dp))
         SectionTitle("Documentos")
+        if (ACCION_APROBAR in accionesValidacion && certificados.isNotEmpty() && LocalDensity.current.fontScale >= 1.3f) {
+            Text("Solo se comparten con el inquilino los certificados marcados.", style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
         if (acciones.contains(ACCION_ADJUNTAR_DOCUMENTO)) {
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 listOf("EVIDENCIA" to "Foto/evidencia", "CERTIFICADO" to "Certificado", "OTRO" to "Parte/otro").forEach { (c, t) ->
@@ -191,7 +240,8 @@ fun IntervencionScreen(
         }
         if (i.documentos.isNullOrEmpty()) EstadoVacio("Sin documentos.", FhIcons.Documento)
         i.documentos.orEmpty().forEach { d ->
-            // La visibilidad se muestra tal cual: un documento INTERNO nunca se presenta como compartido.
+            // La visibilidad se muestra tal cual: un documento INTERNO nunca se presenta como compartido. Solo los
+            // certificados pueden marcarse para compartir, y solo si el backend permite aprobar.
             FilaDocumento(
                 nombre = d.nombreOriginal,
                 chips = {
@@ -199,15 +249,29 @@ fun IntervencionScreen(
                     EstadoChip(etiquetaRevision(d.estadoRevision), tonoRevision(d.estadoRevision))
                     EstadoChip(etiquetaVisibilidad(d.visibilidad), if (d.visibilidad == "COMPARTIDO") Tono.EXITO else Tono.NEUTRO)
                 },
-                accion = { TextButton(onClick = { aDescargar = d; guardar.launch(d.nombreOriginal) }, enabled = !flujo.loading) { Text("Descargar") } }
-            ) {
-                if (acciones.contains(ACCION_APROBAR) && d.categoria == "CERTIFICADO") {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Checkbox(checked = d.id in compartir, onCheckedChange = { marcado -> compartir = if (marcado) compartir + d.id else compartir - d.id })
-                        Text("Compartir con el inquilino al aprobar", style = MaterialTheme.typography.bodySmall)
+                accion = { BotonDescargar(d.nombreOriginal, enabled = !flujo.loading) { aDescargar = d; guardar.launch(d.nombreOriginal) } },
+                pie = if (ACCION_APROBAR in accionesValidacion && d.categoria == "CERTIFICADO") {
+                    {
+                        // Fila completa pulsable (casilla + texto), a todo el ancho de la tarjeta.
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(min = 48.dp)
+                                .toggleable(
+                                    value = d.id in compartir,
+                                    enabled = !flujo.loading,
+                                    role = Role.Checkbox,
+                                    onValueChange = { marcado -> compartir = if (marcado) compartir + d.id else compartir - d.id }
+                                )
+                        ) {
+                            Checkbox(checked = d.id in compartir, onCheckedChange = null, enabled = !flujo.loading)
+                            Spacer(Modifier.width(FhEspacio.s))
+                            Text("Compartir con el inquilino al aprobar", style = MaterialTheme.typography.bodyMedium)
+                        }
                     }
-                }
-            }
+                } else null
+            )
         }
 
         if (!i.validaciones.isNullOrEmpty()) {
@@ -223,27 +287,19 @@ fun IntervencionScreen(
             }
         }
 
-        val accionesValidacion = listOf(ACCION_APROBAR, ACCION_SOLICITAR_CORRECCION, ACCION_CERRAR_SIN_CUMPLIMIENTO).filter { it in acciones }
         if (accionesValidacion.isNotEmpty()) {
             Spacer(Modifier.height(12.dp))
             SectionTitle("Validación")
-            OutlinedTextField(comentario, { comentario = it }, label = { Text("Comentario (obligatorio para corregir o cerrar)") },
-                modifier = Modifier.fillMaxWidth(), minLines = 2)
-            if (ACCION_APROBAR in accionesValidacion) {
-                Text("Los certificados solo se comparten si los marcas; el resto queda interno.", style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            if (ACCION_SOLICITAR_CORRECCION in accionesValidacion && comentario.isBlank()) {
-                Text("Para pedir corrección o cerrar, escribe un comentario.", style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = 6.dp)) {
-                if (ACCION_APROBAR in accionesValidacion) Button(onClick = { confirmar = ACCION_APROBAR }, enabled = !flujo.loading) { Text("Aprobar") }
-                if (ACCION_SOLICITAR_CORRECCION in accionesValidacion) OutlinedButton(
-                    onClick = { confirmar = ACCION_SOLICITAR_CORRECCION }, enabled = !flujo.loading && comentario.isNotBlank()) { Text("Pedir corrección") }
-            }
-            if (ACCION_CERRAR_SIN_CUMPLIMIENTO in accionesValidacion) OutlinedButton(
-                onClick = { confirmar = ACCION_CERRAR_SIN_CUMPLIMIENTO }, enabled = !flujo.loading && comentario.isNotBlank()) { Text("Cerrar sin cumplimiento") }
+            OutlinedTextField(
+                comentario, { comentario = it },
+                label = { Text("Comentario") },
+                supportingText = {
+                    Text(if (ACCION_SOLICITAR_CORRECCION in accionesValidacion || ACCION_CERRAR_SIN_CUMPLIMIENTO in accionesValidacion)
+                        "Obligatorio para pedir corrección o cerrar; opcional al aprobar." else "Opcional.")
+                },
+                enabled = !flujo.loading,
+                modifier = Modifier.fillMaxWidth(), minLines = 2
+            )
         }
     }
 
@@ -256,20 +312,104 @@ fun IntervencionScreen(
             dismissButton = { TextButton(onClick = { confirmarEnvio = false }) { Text("Cancelar") } }
         )
     }
+    // FH-009 / R5: confirmaciones. Cancelar no realiza ninguna peticion y conserva comentario y seleccion; confirmar lanza
+    // una sola vez la operacion existente (la guarda de FlujoViewModel ignora toques repetidos).
     confirmar?.let { accion ->
         if (i != null) AlertDialog(
             onDismissRequest = { confirmar = null },
-            title = { Text(when (accion) { ACCION_APROBAR -> "Aprobar intervención"; ACCION_CERRAR_SIN_CUMPLIMIENTO -> "Cerrar sin cumplimiento"; else -> "Pedir corrección" }) },
-            text = {
+            title = {
                 Text(when (accion) {
-                    ACCION_APROBAR -> "Se declarará el cumplimiento y se recalculará la próxima fecha. Certificados a compartir: ${compartir.size}."
-                    ACCION_CERRAR_SIN_CUMPLIMIENTO -> "El intento queda registrado sin cumplimiento; no cambia la próxima fecha y el mantenimiento sigue pendiente."
-                    else -> "El proveedor podrá modificar y reenviar la intervención."
+                    ACCION_APROBAR -> "¿Aprobar la intervención?"
+                    ACCION_CERRAR_SIN_CUMPLIMIENTO -> "¿Cerrar sin cumplimiento?"
+                    else -> "¿Pedir corrección?"
                 })
             },
-            confirmButton = { TextButton(onClick = { confirmar = null; flujo.validar(i, accion, comentario, compartir.toList()) }) { Text("Confirmar") } },
+            text = {
+                Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(FhEspacio.s)) {
+                    when (accion) {
+                        ACCION_APROBAR -> {
+                            Text("Se declarará el cumplimiento del mantenimiento y se recalculará su próxima fecha.")
+                            val marcados = certificados.filter { it.id in compartir }
+                            if (marcados.isEmpty()) {
+                                Text("No se compartirá ningún documento con el inquilino: todos quedarán internos.")
+                            } else {
+                                Text("Solo se compartirán con el inquilino estos certificados:")
+                                marcados.forEach { Text("• ${it.nombreOriginal}", fontWeight = FontWeight.SemiBold) }
+                                Text("El resto de documentos quedará interno.")
+                            }
+                        }
+                        ACCION_CERRAR_SIN_CUMPLIMIENTO -> {
+                            Text("El intento queda registrado sin cumplimiento; no cambia la próxima fecha y el mantenimiento sigue pendiente.")
+                            Text("Motivo: «${comentario.trim()}»", fontWeight = FontWeight.SemiBold)
+                        }
+                        else -> {
+                            Text("El proveedor podrá modificar y reenviar la intervención.")
+                            Text("Motivo: «${comentario.trim()}»", fontWeight = FontWeight.SemiBold)
+                        }
+                    }
+                    Text("Si cancelas, no se envía nada" + if (accion == ACCION_APROBAR) "." else " y el comentario se conserva.",
+                        style = MaterialTheme.typography.bodySmall)
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { confirmar = null; validacionLanzada = true; flujo.validar(i, accion, comentario, compartir.toList()) }) {
+                    Text("Confirmar")
+                }
+            },
             dismissButton = { TextButton(onClick = { confirmar = null }) { Text("Cancelar") } }
         )
+    }
+}
+
+/**
+ * FH-009 / R5: barra fija de validacion. Explica por que una accion esta desactivada; con fuente grande o tres acciones,
+ * los botones se apilan a todo el ancho.
+ */
+@Composable
+private fun ColumnScope.BarraValidacion(
+    acciones: List<String>,
+    hayComentario: Boolean,
+    hayCertificados: Boolean,
+    ocupado: Boolean,
+    onAccion: (String) -> Unit
+) {
+    val requiereComentario = ACCION_SOLICITAR_CORRECCION in acciones || ACCION_CERRAR_SIN_CUMPLIMIENTO in acciones
+    if (requiereComentario && !hayComentario) {
+        Text("Para «Pedir corrección» escribe un comentario.", style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+    val fuenteGrande = LocalDensity.current.fontScale >= 1.3f
+    // Con fuente grande esta nota va en la seccion «Documentos» para que la barra no ocupe media pantalla.
+    if (ACCION_APROBAR in acciones && hayCertificados && !fuenteGrande) {
+        Text("Solo se comparten con el inquilino los certificados marcados.", style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+    val apilar = fuenteGrande || acciones.size > 2
+    val botones: @Composable (Modifier) -> Unit = { m ->
+        if (ACCION_APROBAR in acciones) {
+            Button(onClick = { onAccion(ACCION_APROBAR) }, enabled = !ocupado, modifier = m.heightIn(min = 48.dp)) { Text("Aprobar") }
+        }
+        if (ACCION_SOLICITAR_CORRECCION in acciones) {
+            OutlinedButton(
+                onClick = { onAccion(ACCION_SOLICITAR_CORRECCION) }, enabled = !ocupado && hayComentario,
+                modifier = m.heightIn(min = 48.dp).semantics {
+                    if (!hayComentario) stateDescription = "Desactivado: escribe un comentario"
+                }
+            ) { Text("Pedir corrección") }
+        }
+        if (ACCION_CERRAR_SIN_CUMPLIMIENTO in acciones) {
+            OutlinedButton(
+                onClick = { onAccion(ACCION_CERRAR_SIN_CUMPLIMIENTO) }, enabled = !ocupado && hayComentario,
+                modifier = m.heightIn(min = 48.dp).semantics {
+                    if (!hayComentario) stateDescription = "Desactivado: escribe un comentario"
+                }
+            ) { Text("Cerrar sin cumplimiento") }
+        }
+    }
+    if (apilar) {
+        Column(verticalArrangement = Arrangement.spacedBy(FhEspacio.xs), modifier = Modifier.fillMaxWidth()) { botones(Modifier.fillMaxWidth()) }
+    } else {
+        Row(horizontalArrangement = Arrangement.spacedBy(FhEspacio.s), modifier = Modifier.fillMaxWidth()) { botones(Modifier.weight(1f)) }
     }
 }
 
