@@ -50,11 +50,19 @@ function Save-Captura([string]$nombre) {
     Invoke-Adb @("shell", "rm", "/sdcard/fh-captura.png") | Out-Null
 }
 
+# FH-009 / R3: cierre de sesion desde el menu de cuenta de las pantallas principales (con confirmacion).
+function Invoke-CerrarSesion {
+    if (-not (Invoke-Tap "Men? de cuenta" 0 1000)) { return $false }
+    if (-not (Invoke-Tap "Cerrar sesi*" 0 1000)) { return $false }
+    if (Wait-Texto "?Cerrar sesi*" 5) { Invoke-Tap "Cerrar sesi*" 0 2000 | Out-Null }
+    return [bool](Wait-Texto "Iniciar sesi*" 10)
+}
+
 function Invoke-Login($cred, [string]$clave) {
     $c = Get-Cuenta $cred $clave
-    # Cerrar una sesion previa si la hay.
+    # Cerrar una sesion previa si la hay (desde un detalle se vuelve primero a la pantalla principal).
     for ($i = 0; $i -lt 4 -and -not (Find-Nodo "Iniciar sesi*"); $i++) {
-        if (-not (Invoke-Tap "Salir")) { Invoke-Tap "Volver" | Out-Null }
+        if (-not (Invoke-CerrarSesion)) { Invoke-Tap "Volver" | Out-Null }
     }
     if (-not (Wait-Texto "Iniciar sesi*" 10)) { return $false }
     if (-not (Set-Campo 0 $c.email $false)) { return $false }
@@ -62,7 +70,8 @@ function Invoke-Login($cred, [string]$clave) {
     if ($email.texto -ne $c.email) { return $false }
     if (-not (Set-Campo 1 $c.password $true)) { return $false }
     Invoke-Tap "Iniciar sesi*" 0 2500 | Out-Null
-    $destino = if ($c.rol -eq "PROVEEDOR") { "Mis trabajos" } else { "Centros" }
+    # FH-009 / R3: pantalla inicial por rol (gestion: Panel de Explotacion; INQUILINO: Mis obligaciones).
+    $destino = switch ($c.rol) { "PROVEEDOR" { "Mis trabajos" } "INQUILINO" { "Mis obligaciones" } default { "Panel de Explotaci*" } }
     return [bool](Wait-Texto $destino 20)
 }
 
@@ -85,14 +94,17 @@ if (Test-Rol "ADMIN") {
 $ok = Invoke-Login $cred "admin"
 Add-Paso "ADMIN" "AND-ADM-01" "login" $ok
 if ($ok) {
+    # FH-009 / R3: ADMIN entra en el Panel; los accesos de gestion se reparten entre la barra inferior (Panel, Centros,
+    # Proveedores, Avisos) y los accesos de la pestana Centros (Validaciones, Declarados, Solicitudes).
+    Invoke-Tap "Centros" 0 2500 | Out-Null
     $nodos = Get-Nodos
-    $menu = @("Panel de Explotaci*", "Validaciones", "Proveedores", "Declarados", "Solicitudes") | Where-Object { -not (Find-Nodo $_ 0 $nodos) }
-    Add-Paso "ADMIN" "AND-ADM-02" "menu de gestion completo (Panel, Validaciones, Proveedores, Declarados, Solicitudes)" ($menu.Count -eq 0) "faltan: $($menu -join ',')"
+    $menu = @("Panel", "Centros", "Proveedores", "Avisos", "Validaciones", "Declarados", "Solicitudes") | Where-Object { -not (Find-Nodo $_ 0 $nodos) }
+    Add-Paso "ADMIN" "AND-ADM-02" "menu de gestion completo (Panel, Centros, Proveedores, Avisos, Validaciones, Declarados, Solicitudes)" ($menu.Count -eq 0) "faltan: $($menu -join ',')"
     Save-Captura "admin-01-centros"
     Invoke-Tap "Proveedores" | Out-Null
     Add-Paso "ADMIN" "AND-ADM-03" "lista de proveedores con Mantenimientos Demo S.L." ([bool](Wait-Texto "Mantenimientos Demo S.L.*")) ""
     Save-Captura "admin-02-proveedores"
-    Invoke-Volver
+    Invoke-Tap "Centros" 0 2500 | Out-Null
     Invoke-Tap "Centro Comercial Demo Madrid" | Out-Null
     Add-Paso "ADMIN" "AND-ADM-04" "datos del centro: locales L-101 y L-205" ([bool](Wait-Texto "L-101*") -and [bool](Find-Nodo "L-205*")) ""
     Save-Captura "admin-03-locales"
@@ -139,7 +151,8 @@ if ($ok) {
         Save-Captura "explotacion-06-aprobada"
     }
     Invoke-Volver; Invoke-Volver
-    if (-not (Find-Nodo "Centros")) { Invoke-Volver }
+    # FH-009 / R3: el Panel es la pantalla inicial; los centros estan en su pestana.
+    if (-not (Find-Nodo "Centro Comercial Demo Madrid")) { Invoke-Tap "Centros" 0 2500 | Out-Null }
     Invoke-Tap "Centro Comercial Demo Madrid" | Out-Null
     Invoke-Tap "Restaurante Demo" 0 2500 | Out-Null
     Invoke-TapScroll "Historial de mantenimientos" 3000 | Out-Null
@@ -237,7 +250,7 @@ if ($ok) {
 # lo usa a la vez).
 $crashes = @((Invoke-Adb @("logcat", "-d", "-b", "crash")) -split "`n" | Where-Object { $_ -match "Process: $([regex]::Escape($script:Pkg))" }).Count
 Add-Paso "APP" "AND-APP-01" "sin cierres inesperados de la app" ($crashes -eq 0) "cierres de $($script:Pkg): $crashes"
-Invoke-Tap "Salir" | Out-Null
+Invoke-CerrarSesion | Out-Null
 Invoke-Adb @("shell", "pm", "clear", $script:Pkg) | Out-Null
 } finally {
     Restore-AnimacionesDemo

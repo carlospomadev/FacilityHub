@@ -9,7 +9,20 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import com.facilityhub.app.ui.theme.FacilityHubTheme
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.consumeWindowInsets
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.ui.Modifier
+import androidx.navigation.NavGraphBuilder
+import androidx.navigation.NavHostController
+import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -76,465 +89,487 @@ fun FacilityHubApp(
     panel: PanelViewModel = viewModel(),
     historial: HistorialViewModel = viewModel()
 ) {
-
-    val nav = rememberNavController()
-
-    val salir: () -> Unit = {
-        vm.logout()
+    // Cierre de sesion local: borra token y datos de todas las pantallas. Con [caducada], el login muestra el motivo.
+    val cerrarSesion: (Boolean) -> Unit = { caducada ->
         flujo.limpiarSesion()
         alertas.limpiar()
         panel.limpiar()
         historial.limpiar()
-        nav.navigate("login") {
-            popUpTo(0)
+        vm.logout(caducada)
+    }
+    val salir: () -> Unit = { cerrarSesion(false) }
+    val caducar: () -> Unit = { cerrarSesion(true) }
+
+    // FH-009 / R3: cualquier 401 fuera del login (token caducado o no valido) devuelve al login.
+    val caducada = vm.sesionCaducada || flujo.sesionCaducada || alertas.sesionCaducada || panel.sesionCaducada ||
+        historial.sesionCaducada
+    LaunchedEffect(caducada) { if (caducada && vm.loggedIn) caducar() }
+
+    // FH-009 / R3: un NavController por sesion. Al entrar o salir se crea uno nuevo, asi que no quedan pantallas, pilas
+    // de pestanas guardadas ni datos de otro usuario accesibles con Atras.
+    key(vm.loggedIn) {
+        val nav = rememberNavController()
+        val pestanas = if (vm.loggedIn) pestanasDeRol(vm.role) else emptyList()
+        val rutasPestana = pestanas.map { it.ruta }.toSet()
+        val entrada by nav.currentBackStackEntryAsState()
+        val rutaActual = entrada?.destination?.route
+        val enPestana = rutaActual in rutasPestana
+
+        // Contador de avisos al mostrarse una pantalla con barra inferior (y al volver a ella).
+        LaunchedEffect(rutaActual) { if (enPestana) alertas.cargarContador() }
+
+        // Cambio de pestana sin duplicados: se vuelve a la pestana inicial guardando el estado de la actual y se
+        // restaura el de la elegida. Atras desde otra pestana lleva a la inicial; desde la inicial, sale de la app.
+        val irPestana: (String) -> Unit = { ruta ->
+            nav.navigate(ruta) {
+                popUpTo(vm.rutaInicio) { saveState = true }
+                launchSingleTop = true
+                restoreState = true
+            }
+        }
+        val abrir: (String) -> Unit = { ruta -> if (ruta in rutasPestana) irPestana(ruta) else nav.navigate(ruta) }
+        val menuCuenta: @Composable () -> Unit = { MenuCuenta(vm.userName, vm.role, salir) }
+
+        // Las pantallas raiz de una pestana muestran el menu de cuenta y no tienen flecha atras.
+        @Composable
+        fun Raiz(ruta: String, contenido: @Composable () -> Unit) {
+            CompositionLocalProvider(LocalMenuCuenta provides (if (ruta in rutasPestana) menuCuenta else null)) { contenido() }
+        }
+
+        Scaffold(
+            contentWindowInsets = WindowInsets(0),
+            bottomBar = {
+                if (enPestana) BarraNavegacion(pestanas, rutaActual, alertas.noLeidas) { p -> irPestana(p.ruta) }
+            }
+        ) { relleno ->
+            // Solo el hueco de la barra inferior: cada pantalla sigue gestionando la barra de estado y el teclado.
+            val inferior = PaddingValues(bottom = relleno.calculateBottomPadding())
+            NavHost(
+                navController = nav,
+                startDestination = if (vm.loggedIn) vm.rutaInicio else "login",
+                modifier = Modifier.padding(inferior).consumeWindowInsets(inferior)
+            ) {
+
+                // Al iniciar sesion cambia vm.loggedIn y se crea la navegacion de la sesion (pantalla inicial del rol).
+                composable("login") {
+                    LoginScreen(vm) { }
+                }
+
+                composable("trabajos") {
+                    Raiz("trabajos") {
+                        TrabajosScreen(
+                            vm = vm,
+                            onTrabajo = { trabajo -> nav.navigate("trabajo/${trabajo.mantenimientoId}") },
+                            onBack = { nav.popBackStack() }
+                        )
+                    }
+                }
+
+                // FH-006 / P6-D1: «Mis notificaciones». Abrir una alerta lleva a la pantalla compatible, que vuelve a
+                // validar el acceso contra el backend.
+                composable("alertas") {
+                    Raiz("alertas") {
+                        MisNotificacionesScreen(
+                            alertas = alertas,
+                            rol = vm.role,
+                            onAbrir = { destino ->
+                                when (destino) {
+                                    is DestinoAlerta.Trabajo -> nav.navigate("trabajo/${destino.mantenimientoId}")
+                                    is DestinoAlerta.Intervencion -> nav.navigate("intervencion/${destino.intervencionId}")
+                                    DestinoAlerta.Declaraciones -> nav.navigate("declaraciones")
+                                    is DestinoAlerta.MantenimientosInquilino ->
+                                        nav.navigate("inquilino-mant/${destino.obligacionId}/${enc("Mantenimientos")}")
+                                    is DestinoAlerta.MantenimientoGestion ->
+                                        nav.navigate("mant-gestion/${destino.mantenimientoId}/${enc("Mantenimiento")}")
+                                }
+                            },
+                            onSesionCaducada = caducar
+                        ) {
+                            nav.popBackStack()
+                        }
+                    }
+                }
+
+                // FH-006 / P6-C3: rol ausente o desconocido -> sin acceso (denegacion por defecto).
+                composable("sin-permisos") {
+                    SinPermisosScreen(onLogout = salir)
+                }
+
+                composable(
+                    route = "intervencion/{id}",
+                    arguments = listOf(navArgument("id") { type = NavType.LongType })
+                ) { entry ->
+                    IntervencionScreen(flujo = flujo, intervencionId = entry.arguments!!.getLong("id")) {
+                        nav.popBackStack()
+                    }
+                }
+
+                composable(
+                    route = "mant-gestion/{id}/{titulo}",
+                    arguments = listOf(
+                        navArgument("id") { type = NavType.LongType },
+                        navArgument("titulo") { type = NavType.StringType }
+                    )
+                ) { entry ->
+                    MantenimientoGestionScreen(
+                        flujo = flujo,
+                        mantenimientoId = entry.arguments!!.getLong("id"),
+                        titulo = dec(entry.arguments!!.getString("titulo")!!),
+                        onIntervencion = { id -> nav.navigate("intervencion/$id") }
+                    ) {
+                        nav.popBackStack()
+                    }
+                }
+
+                // FH-006 / P6-D3-3: panel de Explotacion, solo para gestion (el backend responde 403 al resto).
+                composable("panel") {
+                    Raiz("panel") {
+                        if (vm.puedeGestionar) {
+                            PanelGestionScreen(
+                                panel = panel,
+                                onMantenimiento = { t -> nav.navigate("mant-gestion/${t.mantenimientoId}/${enc(t.tipoMantenimiento)}") },
+                                onIntervencion = { id -> nav.navigate("intervencion/$id") },
+                                onDeclaraciones = { nav.navigate("declaraciones") },
+                                onSolicitudes = { nav.navigate("solicitudes-gestion") },
+                                onSesionCaducada = caducar
+                            ) {
+                                nav.popBackStack()
+                            }
+                        } else {
+                            SinPermisosScreen(onLogout = salir)
+                        }
+                    }
+                }
+
+                // FH-006 / P6-D3-4: historial del local (gestion e INQUILINO; el PROVEEDOR no tiene acceso y el backend
+                // responde 403).
+                composable(
+                    route = "historial/{localId}/{titulo}",
+                    arguments = listOf(
+                        navArgument("localId") { type = NavType.LongType },
+                        navArgument("titulo") { type = NavType.StringType }
+                    )
+                ) { entry ->
+                    if (vm.puedeGestionar || vm.esInquilino) {
+                        HistorialLocalScreen(
+                            historial = historial,
+                            flujo = flujo,
+                            localId = entry.arguments!!.getLong("localId"),
+                            titulo = dec(entry.arguments!!.getString("titulo")!!),
+                            onSesionCaducada = caducar
+                        ) {
+                            nav.popBackStack()
+                        }
+                    } else {
+                        SinPermisosScreen(onLogout = salir)
+                    }
+                }
+
+                composable("validaciones") {
+                    Raiz("validaciones") {
+                        BandejaValidacionScreen(flujo, onIntervencion = { id -> nav.navigate("intervencion/$id") }) { nav.popBackStack() }
+                    }
+                }
+
+                composable("proveedores") {
+                    Raiz("proveedores") {
+                        ProveedoresScreen(flujo) { nav.popBackStack() }
+                    }
+                }
+
+                composable("declaraciones") {
+                    DeclaracionesScreen(flujo) { nav.popBackStack() }
+                }
+
+                composable("solicitudes-gestion") {
+                    SolicitudesGestionScreen(flujo, esAdmin = vm.esAdmin) { nav.popBackStack() }
+                }
+
+                composable("inquilino-obligaciones") {
+                    Raiz("inquilino-obligaciones") {
+                        ObligacionesInquilinoScreen(
+                            flujo = flujo,
+                            onObligacion = { o -> nav.navigate("inquilino-mant/${o.id}/${enc(o.tipoMantenimiento)}") },
+                            onHistorial = { localId, local -> nav.navigate("historial/$localId/${enc(local)}") },
+                            onBack = { nav.popBackStack() },
+                            onCentro = { nav.navigate("centros") }
+                        )
+                    }
+                }
+
+                composable(
+                    route = "inquilino-mant/{id}/{titulo}",
+                    arguments = listOf(
+                        navArgument("id") { type = NavType.LongType },
+                        navArgument("titulo") { type = NavType.StringType }
+                    )
+                ) { entry ->
+                    MantenimientosInquilinoScreen(
+                        flujo = flujo,
+                        obligacionId = entry.arguments!!.getLong("id"),
+                        titulo = dec(entry.arguments!!.getString("titulo")!!)
+                    ) {
+                        nav.popBackStack()
+                    }
+                }
+
+                composable("inquilino-solicitudes") {
+                    Raiz("inquilino-solicitudes") {
+                        SolicitudesInquilinoScreen(flujo) { nav.popBackStack() }
+                    }
+                }
+
+                composable(
+                    route = "trabajo/{mantenimientoId}",
+                    arguments = listOf(navArgument("mantenimientoId") { type = NavType.LongType })
+                ) { entry ->
+                    TrabajoDetalleScreen(
+                        vm = vm,
+                        mantenimientoId = entry.arguments!!.getLong("mantenimientoId"),
+                        flujo = flujo,
+                        onIntervencion = { id -> nav.navigate("intervencion/$id") }
+                    ) {
+                        nav.popBackStack()
+                    }
+                }
+
+                // Centros: pestana de gestion (con los accesos que el rol no tiene en la barra); para el INQUILINO es
+                // una pantalla secundaria abierta desde «Mi local».
+                composable("centros") {
+                    Raiz("centros") {
+                        CentrosScreen(
+                            vm = vm,
+                            onCentro = { centro -> nav.navigate("locales/${centro.id}/${enc(centro.nombre)}") },
+                            onBack = { nav.popBackStack() },
+                            accesos = if (vm.puedeGestionar) ACCESOS_GESTION.filter { it.first !in rutasPestana } else emptyList(),
+                            onMenu = abrir
+                        )
+                    }
+                }
+
+                rutasCentro(nav, vm)
+            }
+        }
+    }
+}
+
+// Accesos de gestion (ruta, etiqueta); en «Centros» solo se muestran los que el rol no tiene en la barra inferior.
+private val ACCESOS_GESTION = listOf(
+    "validaciones" to "Validaciones",
+    "proveedores" to "Proveedores",
+    "declaraciones" to "Declarados",
+    "solicitudes-gestion" to "Solicitudes"
+)
+
+// Navegacion dentro de un centro: locales, ficha del local, mantenimientos y documentos (sin cambios en R3).
+private fun NavGraphBuilder.rutasCentro(nav: NavHostController, vm: FacilityViewModel) {
+    composable(
+        route = "locales/{centroId}/{nombre}",
+
+        arguments = listOf(
+
+            navArgument("centroId") {
+                type = NavType.LongType
+            },
+
+            navArgument("nombre") {
+                type = NavType.StringType
+            }
+        )
+    ) { entry ->
+
+        val centroId =
+            entry.arguments!!.getLong("centroId")
+
+        val nombre =
+            dec(
+                entry.arguments!!
+                    .getString("nombre")!!
+            )
+
+        LocalesScreen(
+            vm = vm,
+            centroId = centroId,
+            centroNombre = nombre,
+
+            onLocal = { local ->
+
+                nav.navigate(
+                    "local/${local.id}/${enc(local.nombre ?: local.codigo)}"
+                )
+            },
+
+            onBack = {
+                nav.popBackStack()
+            }
+        )
+    }
+
+
+    composable(
+        route = "local/{localId}/{nombre}",
+
+        arguments = listOf(
+
+            navArgument("localId") {
+                type = NavType.LongType
+            },
+
+            navArgument("nombre") {
+                type = NavType.StringType
+            }
+        )
+    ) { entry ->
+
+        val localId =
+            entry.arguments!!.getLong("localId")
+
+        val nombre =
+            dec(
+                entry.arguments!!
+                    .getString("nombre")!!
+            )
+
+        LocalDetalleScreen(
+            vm = vm,
+            localId = localId,
+            localNombre = nombre,
+
+            onObligacion = { obligacion ->
+
+                nav.navigate(
+                    "mantenimientos/" +
+                            "${obligacion.id}/" +
+                            "${enc(obligacion.tipoMantenimiento)}/" +
+                            "${obligacion.localId}/" +
+                            "${obligacion.periodicidadMeses}/" +
+                            "${obligacion.proximaFecha}/" +
+                            obligacion.estado
+                )
+            },
+
+            onHistorial = { nav.navigate("historial/$localId/${enc(nombre)}") },
+
+            onBack = {
+                nav.popBackStack()
+            }
+        )
+    }
+
+
+    composable(
+        route =
+            "mantenimientos/{id}/{tipo}/{localId}/{periodicidad}/{fecha}/{estado}",
+
+        arguments = listOf(
+
+            navArgument("id") {
+                type = NavType.LongType
+            },
+
+            navArgument("tipo") {
+                type = NavType.StringType
+            },
+
+            navArgument("localId") {
+                type = NavType.LongType
+            },
+
+            navArgument("periodicidad") {
+                type = NavType.IntType
+            },
+
+            navArgument("fecha") {
+                type = NavType.StringType
+            },
+
+            navArgument("estado") {
+                type = NavType.StringType
+            }
+        )
+    ) { entry ->
+
+        val obligacion = ObligacionDto(
+
+            id =
+                entry.arguments!!.getLong("id"),
+
+            localId =
+                entry.arguments!!.getLong("localId"),
+
+            instalacion = null,
+
+            tipoMantenimiento =
+                dec(
+                    entry.arguments!!
+                        .getString("tipo")!!
+                ),
+
+            periodicidadMeses =
+                entry.arguments!!
+                    .getInt("periodicidad"),
+
+            proximaFecha =
+                entry.arguments!!
+                    .getString("fecha")!!,
+
+            estado =
+                entry.arguments!!
+                    .getString("estado")!!
+        )
+
+        MantenimientosScreen(
+            vm = vm,
+            obligacion = obligacion,
+
+            onDocumentos = { mantenimiento ->
+
+                nav.navigate(
+                    "documentos/${mantenimiento.id}/" +
+                            enc(mantenimiento.descripcion ?: mantenimiento.fechaProgramada)
+                )
+            },
+
+            onIntervenciones = { mantenimiento ->
+                nav.navigate(
+                    "mant-gestion/${mantenimiento.id}/" +
+                            enc(mantenimiento.descripcion ?: mantenimiento.fechaProgramada)
+                )
+            }
+        ) {
+            nav.popBackStack()
         }
     }
 
-    // FH-006 / P6-D1: acceso a la bandeja desde las pantallas raiz (solo con sesion iniciada).
-    val botonAlertas: @Composable () -> Unit = {
-        BotonAlertas(alertas) { nav.navigate("alertas") }
-    }
 
-    // FH-006 / P6-B: pantalla inicial por rol (PROVEEDOR -> "trabajos"; el resto -> "centros").
-    val start =
-        if (vm.loggedIn) {
-            vm.rutaInicio
-        } else {
-            "login"
-        }
+    composable(
+        route = "documentos/{mantenimientoId}/{titulo}",
 
-    NavHost(
-        navController = nav,
-        startDestination = start
-    ) {
+        arguments = listOf(
 
-        composable("login") {
+            navArgument("mantenimientoId") {
+                type = NavType.LongType
+            },
 
-            LoginScreen(vm) {
-
-                nav.navigate(vm.rutaInicio) {
-
-                    popUpTo("login") {
-                        inclusive = true
-                    }
-                }
+            navArgument("titulo") {
+                type = NavType.StringType
             }
-        }
+        )
+    ) { entry ->
 
+        DocumentosScreen(
+            vm = vm,
 
-        composable("trabajos") {
+            mantenimientoId =
+                entry.arguments!!.getLong("mantenimientoId"),
 
-            TrabajosScreen(
-                vm = vm,
-
-                onTrabajo = { trabajo ->
-                    nav.navigate("trabajo/${trabajo.mantenimientoId}")
-                },
-
-                onLogout = salir,
-
-                accionAlertas = botonAlertas
-            )
-        }
-
-
-        // FH-006 / P6-D1: «Mis notificaciones». Abrir una alerta lleva a la pantalla compatible, que vuelve a validar
-        // el acceso contra el backend.
-        composable("alertas") {
-            MisNotificacionesScreen(
-                alertas = alertas,
-                rol = vm.role,
-                onAbrir = { destino ->
-                    when (destino) {
-                        is DestinoAlerta.Trabajo -> nav.navigate("trabajo/${destino.mantenimientoId}")
-                        is DestinoAlerta.Intervencion -> nav.navigate("intervencion/${destino.intervencionId}")
-                        DestinoAlerta.Declaraciones -> nav.navigate("declaraciones")
-                        is DestinoAlerta.MantenimientosInquilino ->
-                            nav.navigate("inquilino-mant/${destino.obligacionId}/${enc("Mantenimientos")}")
-                        is DestinoAlerta.MantenimientoGestion ->
-                            nav.navigate("mant-gestion/${destino.mantenimientoId}/${enc("Mantenimiento")}")
-                    }
-                },
-                onSesionCaducada = salir
-            ) {
-                nav.popBackStack()
-            }
-        }
-
-
-        // FH-006 / P6-C3: rol ausente o desconocido -> sin acceso (denegacion por defecto).
-        composable("sin-permisos") {
-            SinPermisosScreen(onLogout = salir)
-        }
-
-
-        composable(
-            route = "intervencion/{id}",
-            arguments = listOf(navArgument("id") { type = NavType.LongType })
-        ) { entry ->
-            IntervencionScreen(flujo = flujo, intervencionId = entry.arguments!!.getLong("id")) {
-                nav.popBackStack()
-            }
-        }
-
-
-        composable(
-            route = "mant-gestion/{id}/{titulo}",
-            arguments = listOf(
-                navArgument("id") { type = NavType.LongType },
-                navArgument("titulo") { type = NavType.StringType }
-            )
-        ) { entry ->
-            MantenimientoGestionScreen(
-                flujo = flujo,
-                mantenimientoId = entry.arguments!!.getLong("id"),
-                titulo = dec(entry.arguments!!.getString("titulo")!!),
-                onIntervencion = { id -> nav.navigate("intervencion/$id") }
-            ) {
-                nav.popBackStack()
-            }
-        }
-
-
-        // FH-006 / P6-D3-3: panel de Explotacion, solo para gestion (el backend responde 403 al resto).
-        composable("panel") {
-            if (vm.puedeGestionar) {
-                PanelGestionScreen(
-                    panel = panel,
-                    onMantenimiento = { t -> nav.navigate("mant-gestion/${t.mantenimientoId}/${enc(t.tipoMantenimiento)}") },
-                    onIntervencion = { id -> nav.navigate("intervencion/$id") },
-                    onDeclaraciones = { nav.navigate("declaraciones") },
-                    onSolicitudes = { nav.navigate("solicitudes-gestion") },
-                    onSesionCaducada = salir
-                ) {
-                    nav.popBackStack()
-                }
-            } else {
-                SinPermisosScreen(onLogout = salir)
-            }
-        }
-
-        // FH-006 / P6-D3-4: historial del local (gestion e INQUILINO; el PROVEEDOR no tiene acceso y el backend responde 403).
-        composable(
-            route = "historial/{localId}/{titulo}",
-            arguments = listOf(
-                navArgument("localId") { type = NavType.LongType },
-                navArgument("titulo") { type = NavType.StringType }
-            )
-        ) { entry ->
-            if (vm.puedeGestionar || vm.esInquilino) {
-                HistorialLocalScreen(
-                    historial = historial,
-                    flujo = flujo,
-                    localId = entry.arguments!!.getLong("localId"),
-                    titulo = dec(entry.arguments!!.getString("titulo")!!),
-                    onSesionCaducada = salir
-                ) {
-                    nav.popBackStack()
-                }
-            } else {
-                SinPermisosScreen(onLogout = salir)
-            }
-        }
-
-        composable("validaciones") {
-            BandejaValidacionScreen(flujo, onIntervencion = { id -> nav.navigate("intervencion/$id") }) { nav.popBackStack() }
-        }
-
-        composable("proveedores") {
-            ProveedoresScreen(flujo) { nav.popBackStack() }
-        }
-
-        composable("declaraciones") {
-            DeclaracionesScreen(flujo) { nav.popBackStack() }
-        }
-
-        composable("solicitudes-gestion") {
-            SolicitudesGestionScreen(flujo, esAdmin = vm.esAdmin) { nav.popBackStack() }
-        }
-
-        composable("inquilino-obligaciones") {
-            ObligacionesInquilinoScreen(
-                flujo = flujo,
-                onObligacion = { o -> nav.navigate("inquilino-mant/${o.id}/${enc(o.tipoMantenimiento)}") },
-                onSolicitudes = { nav.navigate("inquilino-solicitudes") },
-                onHistorial = { localId, local -> nav.navigate("historial/$localId/${enc(local)}") }
-            ) {
-                nav.popBackStack()
-            }
-        }
-
-        composable(
-            route = "inquilino-mant/{id}/{titulo}",
-            arguments = listOf(
-                navArgument("id") { type = NavType.LongType },
-                navArgument("titulo") { type = NavType.StringType }
-            )
-        ) { entry ->
-            MantenimientosInquilinoScreen(
-                flujo = flujo,
-                obligacionId = entry.arguments!!.getLong("id"),
-                titulo = dec(entry.arguments!!.getString("titulo")!!)
-            ) {
-                nav.popBackStack()
-            }
-        }
-
-        composable("inquilino-solicitudes") {
-            SolicitudesInquilinoScreen(flujo) { nav.popBackStack() }
-        }
-
-
-        composable(
-            route = "trabajo/{mantenimientoId}",
-
-            arguments = listOf(
-                navArgument("mantenimientoId") {
-                    type = NavType.LongType
-                }
-            )
-        ) { entry ->
-
-            TrabajoDetalleScreen(
-                vm = vm,
-                mantenimientoId = entry.arguments!!.getLong("mantenimientoId"),
-                flujo = flujo,
-                onIntervencion = { id -> nav.navigate("intervencion/$id") }
-            ) {
-                nav.popBackStack()
-            }
-        }
-
-
-        composable("centros") {
-
-            CentrosScreen(
-                vm = vm,
-
-                onCentro = { centro ->
-
-                    nav.navigate(
-                        "locales/${centro.id}/${enc(centro.nombre)}"
-                    )
-                },
-
-                onLogout = salir,
-
-                onMenu = { ruta -> nav.navigate(ruta) },
-
-                accionAlertas = botonAlertas
-            )
-        }
-
-
-        composable(
-            route = "locales/{centroId}/{nombre}",
-
-            arguments = listOf(
-
-                navArgument("centroId") {
-                    type = NavType.LongType
-                },
-
-                navArgument("nombre") {
-                    type = NavType.StringType
-                }
-            )
-        ) { entry ->
-
-            val centroId =
-                entry.arguments!!.getLong("centroId")
-
-            val nombre =
+            titulo =
                 dec(
                     entry.arguments!!
-                        .getString("nombre")!!
+                        .getString("titulo")!!
                 )
-
-            LocalesScreen(
-                vm = vm,
-                centroId = centroId,
-                centroNombre = nombre,
-
-                onLocal = { local ->
-
-                    nav.navigate(
-                        "local/${local.id}/${enc(local.nombre ?: local.codigo)}"
-                    )
-                },
-
-                onBack = {
-                    nav.popBackStack()
-                }
-            )
-        }
-
-
-        composable(
-            route = "local/{localId}/{nombre}",
-
-            arguments = listOf(
-
-                navArgument("localId") {
-                    type = NavType.LongType
-                },
-
-                navArgument("nombre") {
-                    type = NavType.StringType
-                }
-            )
-        ) { entry ->
-
-            val localId =
-                entry.arguments!!.getLong("localId")
-
-            val nombre =
-                dec(
-                    entry.arguments!!
-                        .getString("nombre")!!
-                )
-
-            LocalDetalleScreen(
-                vm = vm,
-                localId = localId,
-                localNombre = nombre,
-
-                onObligacion = { obligacion ->
-
-                    nav.navigate(
-                        "mantenimientos/" +
-                                "${obligacion.id}/" +
-                                "${enc(obligacion.tipoMantenimiento)}/" +
-                                "${obligacion.localId}/" +
-                                "${obligacion.periodicidadMeses}/" +
-                                "${obligacion.proximaFecha}/" +
-                                obligacion.estado
-                    )
-                },
-
-                onHistorial = { nav.navigate("historial/$localId/${enc(nombre)}") },
-
-                onBack = {
-                    nav.popBackStack()
-                }
-            )
-        }
-
-
-        composable(
-            route =
-                "mantenimientos/{id}/{tipo}/{localId}/{periodicidad}/{fecha}/{estado}",
-
-            arguments = listOf(
-
-                navArgument("id") {
-                    type = NavType.LongType
-                },
-
-                navArgument("tipo") {
-                    type = NavType.StringType
-                },
-
-                navArgument("localId") {
-                    type = NavType.LongType
-                },
-
-                navArgument("periodicidad") {
-                    type = NavType.IntType
-                },
-
-                navArgument("fecha") {
-                    type = NavType.StringType
-                },
-
-                navArgument("estado") {
-                    type = NavType.StringType
-                }
-            )
-        ) { entry ->
-
-            val obligacion = ObligacionDto(
-
-                id =
-                    entry.arguments!!.getLong("id"),
-
-                localId =
-                    entry.arguments!!.getLong("localId"),
-
-                instalacion = null,
-
-                tipoMantenimiento =
-                    dec(
-                        entry.arguments!!
-                            .getString("tipo")!!
-                    ),
-
-                periodicidadMeses =
-                    entry.arguments!!
-                        .getInt("periodicidad"),
-
-                proximaFecha =
-                    entry.arguments!!
-                        .getString("fecha")!!,
-
-                estado =
-                    entry.arguments!!
-                        .getString("estado")!!
-            )
-
-            MantenimientosScreen(
-                vm = vm,
-                obligacion = obligacion,
-
-                onDocumentos = { mantenimiento ->
-
-                    nav.navigate(
-                        "documentos/${mantenimiento.id}/" +
-                                enc(mantenimiento.descripcion ?: mantenimiento.fechaProgramada)
-                    )
-                },
-
-                onIntervenciones = { mantenimiento ->
-                    nav.navigate(
-                        "mant-gestion/${mantenimiento.id}/" +
-                                enc(mantenimiento.descripcion ?: mantenimiento.fechaProgramada)
-                    )
-                }
-            ) {
-                nav.popBackStack()
-            }
-        }
-
-
-        composable(
-            route = "documentos/{mantenimientoId}/{titulo}",
-
-            arguments = listOf(
-
-                navArgument("mantenimientoId") {
-                    type = NavType.LongType
-                },
-
-                navArgument("titulo") {
-                    type = NavType.StringType
-                }
-            )
-        ) { entry ->
-
-            DocumentosScreen(
-                vm = vm,
-
-                mantenimientoId =
-                    entry.arguments!!.getLong("mantenimientoId"),
-
-                titulo =
-                    dec(
-                        entry.arguments!!
-                            .getString("titulo")!!
-                    )
-            ) {
-                nav.popBackStack()
-            }
+        ) {
+            nav.popBackStack()
         }
     }
 }

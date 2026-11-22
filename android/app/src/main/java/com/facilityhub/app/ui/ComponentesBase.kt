@@ -176,8 +176,11 @@ internal fun ScreenScaffold(
     accionExtra: (@Composable () -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit
 ) {
-    val etiqueta = actionLabel ?: if (title == "Centros" || title == TITULO_MIS_TRABAJOS) "Salir" else "Volver"
-    val volver = etiqueta == "Volver"
+    // FH-009 / R3: en la raiz de una pestana no hay flecha atras; se muestra el menu de cuenta (con «Cerrar sesión»).
+    // Fuera de una pestana: «Volver», salvo una etiqueta explicita (p. ej. «Salir» en la pantalla sin permisos).
+    val menuCuenta = LocalMenuCuenta.current
+    val etiqueta = actionLabel ?: "Volver"
+    val volver = menuCuenta == null && etiqueta == "Volver"
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
@@ -196,7 +199,7 @@ internal fun ScreenScaffold(
                 },
                 actions = {
                     accionExtra?.invoke()
-                    if (!volver) TextButton(onClick = onAction) { Text(etiqueta) }
+                    if (menuCuenta != null) menuCuenta() else if (!volver) TextButton(onClick = onAction) { Text(etiqueta) }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
             )

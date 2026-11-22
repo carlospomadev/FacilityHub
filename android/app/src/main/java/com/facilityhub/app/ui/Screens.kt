@@ -169,6 +169,11 @@ fun LoginScreen(
                 Spacer(modifier = Modifier.height(FhEspacio.m))
                 if (credenciales) EstadoError(error) else EstadoError(error, enabled = !vm.loading) { entrar() }
             }
+            // FH-009 / R3: motivo de la vuelta al login (sesion caducada), solo si no hay un error mas reciente.
+            if (vm.error == null) vm.avisoLogin?.let { aviso ->
+                Spacer(modifier = Modifier.height(FhEspacio.m))
+                Mensaje(aviso, Tono.INFO)
+            }
         }
         }
     }
@@ -197,13 +202,15 @@ private fun TextoSecundario(texto: String) {
 }
 
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun CentrosScreen(
     vm: FacilityViewModel,
     onCentro: (CentroDto) -> Unit,
-    onLogout: () -> Unit,
-    onMenu: (String) -> Unit = {},
-    accionAlertas: (@Composable () -> Unit)? = null
+    onBack: () -> Unit,
+    // FH-009 / R3: accesos de gestion que el rol no tiene en la barra inferior (ruta, etiqueta). Vacio para el resto.
+    accesos: List<Pair<String, String>> = emptyList(),
+    onMenu: (String) -> Unit = {}
 ) {
     LaunchedEffect(Unit) {
         if (vm.centros.isEmpty()) {
@@ -214,31 +221,15 @@ fun CentrosScreen(
     ScreenScaffold(
         title = "Centros",
         subtitle = listOf(vm.userName, rolLegible(vm.role)).filter { it.isNotBlank() }.joinToString(" · "),
-        onAction = onLogout,
-        accionExtra = accionAlertas
+        onAction = onBack
     ) {
-        // FH-006 / P6-C3: accesos por rol (la navegacion no sustituye a los controles del backend). La navegacion por rol
-        // se redisena en R3; aqui solo cambia el aspecto.
-        if (vm.puedeGestionar) {
-            // FH-006 / P6-D3-3: panel de Explotacion (ADMIN y EXPLOTACION).
-            Button(onClick = { onMenu("panel") }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
-                Icon(FhIcons.Vencido, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(FhEspacio.s))
-                Text("Panel de Explotación")
-            }
-            Spacer(Modifier.height(FhEspacio.s))
-            Row(horizontalArrangement = Arrangement.spacedBy(FhEspacio.s), modifier = Modifier.fillMaxWidth()) {
-                FilledTonalButton(onClick = { onMenu("validaciones") }, modifier = Modifier.weight(1f)) { Text("Validaciones") }
-                FilledTonalButton(onClick = { onMenu("proveedores") }, modifier = Modifier.weight(1f)) { Text("Proveedores") }
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(FhEspacio.s), modifier = Modifier.fillMaxWidth()) {
-                OutlinedButton(onClick = { onMenu("declaraciones") }, modifier = Modifier.weight(1f)) { Text("Declarados") }
-                OutlinedButton(onClick = { onMenu("solicitudes-gestion") }, modifier = Modifier.weight(1f)) { Text("Solicitudes") }
-            }
-            Spacer(Modifier.height(FhEspacio.m))
-        } else if (vm.esInquilino) {
-            Button(onClick = { onMenu("inquilino-obligaciones") }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
-                Text("Mis obligaciones y proveedores")
+        // FH-006 / P6-C3 y FH-009 / R3: accesos por rol (la navegacion no sustituye a los controles del backend). Panel,
+        // avisos y la pestana propia del rol estan en la barra inferior; aqui quedan los demas accesos de gestion.
+        if (accesos.isNotEmpty()) {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(FhEspacio.s), modifier = Modifier.fillMaxWidth()) {
+                accesos.forEach { (ruta, etiqueta) ->
+                    OutlinedButton(onClick = { onMenu(ruta) }, modifier = Modifier.heightIn(min = 48.dp)) { Text(etiqueta) }
+                }
             }
             Spacer(Modifier.height(FhEspacio.m))
         }
@@ -646,8 +637,7 @@ internal fun FilaDocumento(
 fun TrabajosScreen(
     vm: FacilityViewModel,
     onTrabajo: (TrabajoProveedorDto) -> Unit,
-    onLogout: () -> Unit,
-    accionAlertas: (@Composable () -> Unit)? = null
+    onBack: () -> Unit
 ) {
     LaunchedEffect(Unit) {
         vm.cargarTrabajos()
@@ -656,8 +646,7 @@ fun TrabajosScreen(
     ScreenScaffold(
         title = TITULO_MIS_TRABAJOS,
         subtitle = listOf(vm.userName, rolLegible(vm.role)).filter { it.isNotBlank() }.joinToString(" · "),
-        onAction = onLogout,
-        accionExtra = accionAlertas
+        onAction = onBack
     ) {
         EstadoCargando(vm.loading)
         vm.error?.let { EstadoError(it, enabled = !vm.loading) { vm.cargarTrabajos() } }
