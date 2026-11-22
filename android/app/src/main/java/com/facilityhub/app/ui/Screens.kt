@@ -3,6 +3,10 @@ package com.facilityhub.app.ui
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -664,50 +668,142 @@ internal fun BotonDescargar(nombre: String, enabled: Boolean, onClick: () -> Uni
 
 // FH-006 / P6-B: trabajos asignados a la empresa del PROVEEDOR. Solo lectura: no hay botones de escritura;
 // las acciones futuras (P6-C) se mostraran unicamente si el backend las incluye en accionesPermitidas.
+// FH-009 / R6: «Mis trabajos» del PROVEEDOR con pestanas por fase del trabajo. La clasificacion se deriva de los estados
+// reales de la API (no se inventan estados):
+//  - Correccion: la ultima intervencion de su empresa esta en REQUIERE_CORRECCION.
+//  - Enviados: intervencion PENDIENTE_VALIDACION o APROBADO, o mantenimiento FINALIZADO/CANCELADO (nada que hacer).
+//  - Por hacer: el resto (sin intervencion, BORRADOR o CERRADO_SIN_CUMPLIMIENTO: el intento se cerro y el mantenimiento
+//    sigue pendiente).
+internal enum class FaseTrabajo(val etiqueta: String) { POR_HACER("Por hacer"), CORRECCION("Corrección"), ENVIADOS("Enviados") }
+
+internal fun faseTrabajo(t: TrabajoProveedorDto): FaseTrabajo = when {
+    t.estadoValidacion == "REQUIERE_CORRECCION" -> FaseTrabajo.CORRECCION
+    t.estadoValidacion == "PENDIENTE_VALIDACION" || t.estadoValidacion == "APROBADO" ||
+        t.estado == "FINALIZADO" || t.estado == "CANCELADO" -> FaseTrabajo.ENVIADOS
+    else -> FaseTrabajo.POR_HACER
+}
+
 @Composable
 fun TrabajosScreen(
     vm: FacilityViewModel,
+    flujo: FlujoViewModel,
     onTrabajo: (TrabajoProveedorDto) -> Unit,
+    onIntervencion: (Long) -> Unit,
     onBack: () -> Unit
 ) {
-    LaunchedEffect(Unit) {
-        vm.cargarTrabajos()
-    }
+    LaunchedEffect(Unit) { vm.cargarTrabajos() }
+    val porFase = vm.trabajos.groupBy { faseTrabajo(it) }
+    val correcciones = porFase[FaseTrabajo.CORRECCION].orEmpty()
+    // Motivo de cada correccion (endpoint existente de la intervencion; se refresca al mostrarse la lista).
+    val idsCorreccion = correcciones.mapNotNull { it.intervencionId }
+    LaunchedEffect(idsCorreccion) { if (idsCorreccion.isNotEmpty()) flujo.cargarComentariosCorreccion(idsCorreccion) }
+
+    // Pestana elegida (se conserva al abrir un trabajo y volver). Hasta que el usuario elige, se abre la de correccion si
+    // hay alguna (lo mas urgente) y si no «Por hacer».
+    var elegida by rememberSaveable { mutableStateOf(-1) }
+    val pestana = if (elegida >= 0) elegida else if (correcciones.isNotEmpty()) FaseTrabajo.CORRECCION.ordinal else FaseTrabajo.POR_HACER.ordinal
+    val fase = FaseTrabajo.entries[pestana]
+    val lista = porFase[fase].orEmpty()
 
     ScreenScaffold(
         title = TITULO_MIS_TRABAJOS,
         subtitle = listOf(vm.userName, rolLegible(vm.role)).filter { it.isNotBlank() }.joinToString(" · "),
         onAction = onBack
     ) {
+        PestanasInternas(
+            titulos = FaseTrabajo.entries.map { f -> "${f.etiqueta} · ${porFase[f].orEmpty().size}" },
+            seleccionada = pestana,
+            onSeleccionar = { elegida = it }
+        )
+        Spacer(Modifier.height(FhEspacio.s))
         EstadoCargando(vm.loading)
         vm.error?.let { EstadoError(it, enabled = !vm.loading) { vm.cargarTrabajos() } }
-
-        if (!vm.loading && vm.trabajos.isEmpty() && vm.error == null) {
-            EstadoVacio("No tienes trabajos asignados.", FhIcons.Herramienta)
+        if (!vm.loading && vm.error == null && lista.isEmpty()) {
+            EstadoVacio(
+                when (fase) {
+                    FaseTrabajo.POR_HACER -> if (vm.trabajos.isEmpty()) "No tienes trabajos asignados." else "No tienes trabajos pendientes de hacer."
+                    FaseTrabajo.CORRECCION -> "No tienes trabajos devueltos para corregir."
+                    FaseTrabajo.ENVIADOS -> "Todavía no has enviado trabajos a validación."
+                },
+                if (fase == FaseTrabajo.CORRECCION) FhIcons.Hecho else FhIcons.Herramienta
+            )
         }
+        LazyColumn(verticalArrangement = Arrangement.spacedBy(FhEspacio.s), contentPadding = PaddingValues(bottom = FhEspacio.l)) {
+            items(lista, key = { it.mantenimientoId }) { t ->
+                TarjetaTrabajoProveedor(t, flujo.comentariosCorreccion[t.intervencionId], onAbrir = { onTrabajo(t) },
+                    onCorregir = t.intervencionId?.let { id -> { onIntervencion(id) } })
+            }
+        }
+    }
+}
 
-        LazyColumn(
-            verticalArrangement = Arrangement.spacedBy(FhEspacio.s)
-        ) {
-            items(vm.trabajos) { trabajo ->
-                TarjetaLista(trabajo.tipoMantenimiento, onClick = { onTrabajo(trabajo) }) {
-                    TextoSecundario(listOfNotNull(trabajo.centro, trabajo.local ?: "Zona común").joinToString(" · "))
-                    // FH-006 / P6-C3: estado de la ultima intervencion de su empresa, delante del estado del mantenimiento.
-                    FilaChips {
-                        if (trabajo.estadoValidacion != null) {
-                            EstadoChip(etiquetaValidacion(trabajo.estadoValidacion), tonoValidacion(trabajo.estadoValidacion),
-                                iconoValidacion(trabajo.estadoValidacion))
-                        }
-                        EstadoChip(etiquetaEstado(trabajo.estado) ?: trabajo.estado, tonoEstado(trabajo.estado))
-                    }
-                    Text(
-                        text = "Programado ${fechaCorta(trabajo.fechaProgramada)}" +
-                            if (trabajo.estadoValidacion == null) " · ${etiquetaValidacion(null)}" else "",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = FhEspacio.xs)
-                    )
+/** Tarjeta de trabajo del proveedor: estado y accion que corresponde delante; la correccion se destaca con texto e icono. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun TarjetaTrabajoProveedor(
+    t: TrabajoProveedorDto,
+    correccion: ValidacionDto?,
+    onAbrir: () -> Unit,
+    onCorregir: (() -> Unit)?
+) {
+    val fase = faseTrabajo(t)
+    val accion = when (fase) {
+        FaseTrabajo.CORRECCION -> "Abrir para corregir y enviar a validación"
+        FaseTrabajo.POR_HACER -> if (t.estadoValidacion == "BORRADOR") "Abrir para completar y enviar" else "Abrir para registrar la intervención"
+        FaseTrabajo.ENVIADOS -> "Ver el trabajo"
+    }
+    Card(
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+        border = if (fase == FaseTrabajo.CORRECCION) BorderStroke(2.dp, MaterialTheme.colorScheme.error) else null,
+        modifier = Modifier.fillMaxWidth().clickable(onClickLabel = accion, role = Role.Button, onClick = onAbrir)
+    ) {
+        Column(Modifier.padding(FhEspacio.m), verticalArrangement = Arrangement.spacedBy(FhEspacio.xs)) {
+            // 1. Estado (lo que importa al tecnico) delante.
+            FilaChips {
+                if (t.estadoValidacion != null) {
+                    EstadoChip(etiquetaValidacion(t.estadoValidacion), tonoValidacion(t.estadoValidacion), iconoValidacion(t.estadoValidacion))
                 }
+                EstadoChip(etiquetaEstado(t.estado) ?: t.estado, tonoEstado(t.estado))
+            }
+            // 2. Nombre y ubicacion.
+            Row(verticalAlignment = Alignment.Top) {
+                Text(t.tipoMantenimiento, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                Icon(FhIcons.Siguiente, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Text(listOfNotNull(t.centro, t.local ?: "Zona común").joinToString(" · "),
+                style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            t.instalacion?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+            Text(
+                "Programado ${fechaCorta(t.fechaProgramada)}" + if (t.estadoValidacion == null) " · ${etiquetaValidacion(null)}" else "",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            // 3. Correccion: motivo de Explotacion visible y acceso directo para corregir.
+            if (fase == FaseTrabajo.CORRECCION) {
+                val (fondo, contenido) = coloresTono(Tono.ERROR)
+                Surface(color = fondo, contentColor = contenido, shape = MaterialTheme.shapes.medium, modifier = Modifier.fillMaxWidth()) {
+                    Row(Modifier.padding(FhEspacio.m)) {
+                        Icon(FhIcons.Editar, contentDescription = null, modifier = Modifier.size(20.dp))
+                        Spacer(Modifier.width(FhEspacio.s))
+                        Column {
+                            Text("Motivo de la corrección", style = MaterialTheme.typography.labelLarge)
+                            Text(correccion?.comentario?.let { "«$it»" } ?: "Abre la intervención para ver el motivo.",
+                                style = MaterialTheme.typography.bodyMedium)
+                            correccion?.let { v ->
+                                Text(listOfNotNull("Explotación", v.validadaPor, v.fecha?.let { fechaHora(it) }).distinct().joinToString(" · "),
+                                    style = MaterialTheme.typography.bodySmall)
+                            }
+                        }
+                    }
+                }
+                if (onCorregir != null) {
+                    Button(onClick = onCorregir, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+                        Icon(FhIcons.Editar, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(FhEspacio.s))
+                        Text("Corregir y reenviar")
+                    }
+                }
+            } else {
+                Text(accion, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
             }
         }
     }

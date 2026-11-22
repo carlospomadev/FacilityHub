@@ -159,7 +159,9 @@ fun FacilityHubApp(
                     Raiz("trabajos") {
                         TrabajosScreen(
                             vm = vm,
+                            flujo = flujo,
                             onTrabajo = { trabajo -> nav.navigate("trabajo/${trabajo.mantenimientoId}") },
+                            onIntervencion = { id -> nav.navigate("intervencion/$id") },
                             onBack = { nav.popBackStack() }
                         )
                     }
@@ -289,9 +291,10 @@ fun FacilityHubApp(
                     Raiz("inquilino-obligaciones") {
                         ObligacionesInquilinoScreen(
                             flujo = flujo,
+                            historial = historial,
                             onObligacion = { o -> nav.navigate("inquilino-mant/${o.id}/${enc(o.tipoMantenimiento)}") },
-                            onHistorial = { localId, local -> nav.navigate("historial/$localId/${enc(local)}") },
                             onBack = { nav.popBackStack() },
+                            onSesionCaducada = caducar,
                             onCentro = { nav.navigate("centros") }
                         )
                     }
