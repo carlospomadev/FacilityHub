@@ -56,19 +56,7 @@ internal fun destinoAlerta(a: AlertaDto, rol: String): DestinoAlerta? = when {
     else -> null
 }
 
-// Acceso a la bandeja con el numero de no leidas. Solo se muestra en pantallas raiz (con sesion iniciada); el contador
-// se pide al mostrarse la pantalla y al volver a ella.
-@Composable
-fun BotonAlertas(alertas: AlertasViewModel, onAbrir: () -> Unit) {
-    LaunchedEffect(Unit) { alertas.cargarContador() }
-    // FH-009 / R1: campana con insignia; la descripcion empieza por "Avisos" (lectores de pantalla y pruebas por texto).
-    val n = alertas.noLeidas
-    IconButton(onClick = onAbrir) {
-        BadgedBox(badge = { if (n > 0) Badge { Text(if (n > 99) "99+" else n.toString()) } }) {
-            Icon(FhIcons.Avisos, contentDescription = if (n > 0) "Avisos, $n sin leer" else "Avisos")
-        }
-    }
-}
+// FH-009 / R3: el acceso a la bandeja es la pestana «Avisos» de la barra inferior (con la insignia de no leidas).
 
 @Composable
 fun MisNotificacionesScreen(

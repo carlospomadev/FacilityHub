@@ -40,11 +40,13 @@ class FacilityViewModel(application: Application) : AndroidViewModel(application
 
     // Pantalla inicial segun el rol. FH-006 / P6-C3: denegacion por defecto; un rol ausente o desconocido no entra en
     // ninguna pantalla de datos (la navegacion por rol no sustituye a los controles del backend).
-    val rutaInicio: String get() = when {
-        esProveedor -> "trabajos"
-        puedeGestionar || esInquilino -> "centros"
-        else -> "sin-permisos"
-    }
+    // FH-009 / R3: gestion -> Panel de Explotacion; PROVEEDOR -> Mis trabajos; INQUILINO -> Mis obligaciones (Mi local).
+    val rutaInicio: String get() = pestanasDeRol(role).firstOrNull()?.ruta ?: "sin-permisos"
+
+    // FH-009 / R3: un 401 fuera del login indica sesion caducada o token no valido; la app vuelve al login.
+    var sesionCaducada by mutableStateOf(false); private set
+    // Aviso informativo para la pantalla de login (p. ej. tras caducar la sesion). Se borra al intentar entrar.
+    var avisoLogin by mutableStateOf<String?>(null); private set
 
     var centros by mutableStateOf<List<CentroDto>>(emptyList()); private set
     var locales by mutableStateOf<List<LocalDto>>(emptyList()); private set
@@ -62,7 +64,7 @@ class FacilityViewModel(application: Application) : AndroidViewModel(application
     fun login(email: String, password: String, onSuccess: () -> Unit) {
         // Guarda sincrona contra envios duplicados (doble toque, tecla Entrar + boton).
         if (loading) return
-        loading = true; error = null; credencialesIncorrectas = false
+        loading = true; error = null; credencialesIncorrectas = false; avisoLogin = null; sesionCaducada = false
         viewModelScope.launch {
             try {
                 // Limite propio solo para la autenticacion (no cambia el cliente HTTP del resto de pantallas): ante un
@@ -171,7 +173,10 @@ class FacilityViewModel(application: Application) : AndroidViewModel(application
 
     private fun prepararDocumento(uri: Uri): DocumentoLocal = prepararDocumentoLocal(getApplication(), uri)
 
-    fun logout() {
+    /** Cierra la sesion local (token y datos). Con [caducada], el login muestra el motivo. No llama a la API. */
+    fun logout(caducada: Boolean = false) {
+        sesionCaducada = false
+        avisoLogin = if (caducada) "Tu sesión ha caducado. Vuelve a iniciar sesión." else null
         tokenStore.clear(); loggedIn = false; userName = ""; role = ""
         centros = emptyList(); locales = emptyList(); obligaciones = emptyList(); mantenimientos = emptyList()
         documentos = emptyList(); trabajos = emptyList(); trabajo = null
@@ -183,7 +188,10 @@ class FacilityViewModel(application: Application) : AndroidViewModel(application
 
     private suspend fun action(block: suspend () -> Unit) {
         loading = true; error = null
-        try { block() } catch (e: Exception) { error = mensajeError(e) }
+        try { block() } catch (e: Exception) {
+            error = mensajeError(e)
+            if (e is HttpException && e.code() == 401 && loggedIn) sesionCaducada = true
+        }
         finally { loading = false }
     }
 }

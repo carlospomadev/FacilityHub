@@ -29,20 +29,23 @@ internal fun etiquetaDeclaracion(e: String) = when (e) {
 fun ObligacionesInquilinoScreen(
     flujo: FlujoViewModel,
     onObligacion: (ObligacionInquilinoDto) -> Unit,
-    onSolicitudes: () -> Unit,
     onHistorial: (Long, String) -> Unit,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    // FH-009 / R3: las solicitudes son una pestana propia; aqui queda el acceso a la ficha del centro y del local.
+    onCentro: (() -> Unit)? = null
 ) {
     LaunchedEffect(Unit) { flujo.limpiarMensajes(); flujo.cargarObligacionesInquilino() }
     var declarando by remember { mutableStateOf<ObligacionInquilinoDto?>(null) }
     var solicitando by remember { mutableStateOf<ObligacionInquilinoDto?>(null) }
 
-    ScreenScaffold(title = "Mis obligaciones", subtitle = "Inquilino", onAction = onBack, scrollable = true) {
+    ScreenScaffold(title = "Mis obligaciones", subtitle = "Mi local · Inquilino", onAction = onBack, scrollable = true) {
         MensajesFlujo(flujo)
-        TextButton(onClick = onSolicitudes) {
-            Icon(FhIcons.Solicitud, contentDescription = null, modifier = Modifier.size(18.dp))
-            Spacer(Modifier.width(FhEspacio.s))
-            Text("Mis solicitudes de proveedor")
+        if (onCentro != null) {
+            TextButton(onClick = onCentro) {
+                Icon(FhIcons.Centros, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(FhEspacio.s))
+                Text("Mi centro y local")
+            }
         }
         // FH-006 / P6-D3-4: historial de cada local con ocupacion vigente (el backend vuelve a comprobar el acceso).
         flujo.obligacionesInquilino.distinctBy { it.localId }.forEach { o ->

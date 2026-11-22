@@ -41,6 +41,9 @@ class FlujoViewModel(application: Application) : AndroidViewModel(application) {
     var solicitudesInquilino by mutableStateOf<List<SolicitudProveedorDto>>(emptyList()); private set
     var proveedorEncontrado by mutableStateOf<ProveedorBasicoDto?>(null); private set
 
+    // FH-009 / R3: un 401 indica sesion caducada o token no valido; la app vuelve al login.
+    var sesionCaducada by mutableStateOf(false); private set
+
     fun limpiarMensajes() { error = null; aviso = null }
 
     // ---------- Lecturas ----------
@@ -211,15 +214,20 @@ class FlujoViewModel(application: Application) : AndroidViewModel(application) {
         intervencionesMantenimiento = emptyList(); intervencion = null; pendientes = emptyList(); proveedores = emptyList()
         asignacion = null; declaraciones = emptyList(); solicitudesGestion = emptyList(); obligacionesInquilino = emptyList()
         mantenimientosInquilino = emptyList(); solicitudesInquilino = emptyList(); proveedorEncontrado = null
-        error = null; aviso = null
+        error = null; aviso = null; sesionCaducada = false
     }
 
     // ---------- Utilidades ----------
 
+    private fun fallo(e: Exception) {
+        error = mensajeError(e)
+        if (e is HttpException && e.code() == 401) sesionCaducada = true
+    }
+
     private fun lectura(block: suspend () -> Unit) {
         viewModelScope.launch {
             loading = true; error = null
-            try { block() } catch (e: Exception) { error = mensajeError(e) } finally { loading = false }
+            try { block() } catch (e: Exception) { fallo(e) } finally { loading = false }
         }
     }
 
@@ -228,7 +236,7 @@ class FlujoViewModel(application: Application) : AndroidViewModel(application) {
         if (loading) return
         loading = true; error = null; aviso = null
         viewModelScope.launch {
-            try { block() } catch (e: Exception) { error = mensajeError(e) } finally { loading = false }
+            try { block() } catch (e: Exception) { fallo(e) } finally { loading = false }
         }
     }
 }
