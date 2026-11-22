@@ -8,6 +8,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.facilityhub.app.data.AlertaDto
+import com.facilityhub.app.ui.theme.FhEspacio
+import com.facilityhub.app.ui.theme.FhIcons
 
 // FH-006 / P6-D1: icono de avisos con contador y bandeja «Mis notificaciones».
 
@@ -59,11 +61,11 @@ internal fun destinoAlerta(a: AlertaDto, rol: String): DestinoAlerta? = when {
 @Composable
 fun BotonAlertas(alertas: AlertasViewModel, onAbrir: () -> Unit) {
     LaunchedEffect(Unit) { alertas.cargarContador() }
-    TextButton(onClick = onAbrir) {
-        Text("Avisos")
-        if (alertas.noLeidas > 0) {
-            Spacer(Modifier.width(4.dp))
-            Badge { Text(if (alertas.noLeidas > 99) "99+" else alertas.noLeidas.toString()) }
+    // FH-009 / R1: campana con insignia; la descripcion empieza por "Avisos" (lectores de pantalla y pruebas por texto).
+    val n = alertas.noLeidas
+    IconButton(onClick = onAbrir) {
+        BadgedBox(badge = { if (n > 0) Badge { Text(if (n > 99) "99+" else n.toString()) } }) {
+            Icon(FhIcons.Avisos, contentDescription = if (n > 0) "Avisos, $n sin leer" else "Avisos")
         }
     }
 }
@@ -85,26 +87,28 @@ fun MisNotificacionesScreen(
             Checkbox(checked = alertas.soloNoLeidas, onCheckedChange = { alertas.cambiarFiltro(it) }, enabled = !alertas.loading)
             Text("Solo no leídas")
         }
-        if (alertas.loading) LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-        alertas.error?.let { e ->
-            Text(e, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(vertical = 4.dp))
-            TextButton(onClick = { alertas.cargar() }, enabled = !alertas.loading) { Text("Reintentar") }
-        }
+        EstadoCargando(alertas.loading)
+        alertas.error?.let { e -> EstadoError(e, enabled = !alertas.loading) { alertas.cargar() } }
         if (alertas.cargada && !alertas.loading && alertas.error == null && alertas.alertas.isEmpty()) {
-            Text(if (alertas.soloNoLeidas) "No tienes avisos sin leer." else "No tienes avisos.", modifier = Modifier.padding(vertical = 12.dp))
+            EstadoVacio(if (alertas.soloNoLeidas) "No tienes avisos sin leer." else "No tienes avisos.", FhIcons.Avisos)
         }
         alertas.alertas.forEach { a ->
             val leida = a.leidaAt != null
             val destino = destinoAlerta(a, rol)
-            Card(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-                Column(modifier = Modifier.padding(12.dp)) {
+            Card(
+                colors = CardDefaults.cardColors(
+                    containerColor = if (leida) MaterialTheme.colorScheme.surfaceContainerLow else MaterialTheme.colorScheme.surfaceContainerHigh
+                ),
+                modifier = Modifier.fillMaxWidth().padding(vertical = FhEspacio.xs)
+            ) {
+                Column(modifier = Modifier.padding(FhEspacio.m)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(etiquetaAlerta(a.tipo), fontWeight = if (leida) FontWeight.Normal else FontWeight.Bold, modifier = Modifier.weight(1f))
-                        Text(if (leida) "Leída" else "Nueva", style = MaterialTheme.typography.labelSmall,
-                            color = if (leida) MaterialTheme.colorScheme.outline else MaterialTheme.colorScheme.primary)
+                        Text(etiquetaAlerta(a.tipo), style = MaterialTheme.typography.titleSmall,
+                            fontWeight = if (leida) FontWeight.Normal else FontWeight.Bold, modifier = Modifier.weight(1f))
+                        EstadoChip(if (leida) "Leída" else "Nueva", if (leida) Tono.NEUTRO else Tono.PRIMARIO)
                     }
-                    Text(a.mensaje)
-                    Text(fechaHora(a.createdAt), style = MaterialTheme.typography.bodySmall)
+                    Text(a.mensaje, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = FhEspacio.xs))
+                    Text(fechaHora(a.createdAt), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         if (destino != null) TextButton(onClick = { alertas.marcarLeida(a) { onAbrir(destino) } }, enabled = !alertas.loading) {
                             Text("Abrir")

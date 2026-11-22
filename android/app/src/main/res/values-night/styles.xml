@@ -1,0 +1,8 @@
+<resources>
+    <!-- FH-009 / R1: ventana oscura en modo noche (evita el destello blanco al abrir y los iconos de sistema oscuros). -->
+    <style name="Theme.FacilityHub" parent="android:style/Theme.Material.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowBackground">@android:color/black</item>
+    </style>
+</resources>

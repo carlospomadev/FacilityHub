@@ -12,6 +12,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.facilityhub.app.data.*
+import com.facilityhub.app.ui.theme.FhEspacio
+import com.facilityhub.app.ui.theme.FhIcons
 
 // FH-006 / P6-C3: area del INQUILINO (obligaciones de sus ocupaciones vigentes) y revision de proveedores por gestion.
 // Las obligaciones NHOOD se muestran solo para consulta: el backend no devuelve acciones para ellas.
@@ -37,27 +39,44 @@ fun ObligacionesInquilinoScreen(
 
     ScreenScaffold(title = "Mis obligaciones", subtitle = "Inquilino", onAction = onBack, scrollable = true) {
         MensajesFlujo(flujo)
-        TextButton(onClick = onSolicitudes) { Text("Mis solicitudes de proveedor") }
+        TextButton(onClick = onSolicitudes) {
+            Icon(FhIcons.Solicitud, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(FhEspacio.s))
+            Text("Mis solicitudes de proveedor")
+        }
         // FH-006 / P6-D3-4: historial de cada local con ocupacion vigente (el backend vuelve a comprobar el acceso).
         flujo.obligacionesInquilino.distinctBy { it.localId }.forEach { o ->
-            OutlinedButton(onClick = { onHistorial(o.localId, o.local) }, modifier = Modifier.fillMaxWidth()) {
+            FilledTonalButton(onClick = { onHistorial(o.localId, o.local) }, modifier = Modifier.fillMaxWidth().padding(vertical = FhEspacio.xs)) {
+                Icon(FhIcons.Historico, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(FhEspacio.s))
                 Text("Historial del local ${o.local}")
             }
         }
         if (!flujo.loading && flujo.obligacionesInquilino.isEmpty() && flujo.error == null) {
-            Text("No tienes obligaciones en locales con ocupación vigente.")
+            EstadoVacio("No tienes obligaciones en locales con ocupación vigente.", FhIcons.Edificio)
         }
+        if (flujo.obligacionesInquilino.isNotEmpty()) SectionTitle("Obligaciones")
         flujo.obligacionesInquilino.forEach { o ->
             val acciones = o.accionesPermitidas.orEmpty()
-            Card(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).clickable { onObligacion(o) }) {
-                Column(modifier = Modifier.padding(12.dp)) {
-                    Text(o.tipoMantenimiento, fontWeight = FontWeight.Bold)
-                    Text("${o.local}${o.instalacion?.let { " · $it" }.orEmpty()}")
-                    Text("Próxima fecha: ${o.proximaFecha}")
-                    Text(if (o.responsable == "INQUILINO") "Responsable: inquilino (gestionas tú el proveedor)" else "Responsable: NHOOD (solo consulta)",
-                        style = MaterialTheme.typography.bodySmall)
+            Card(
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+                modifier = Modifier.fillMaxWidth().padding(vertical = FhEspacio.xs).clickable { onObligacion(o) }
+            ) {
+                Column(modifier = Modifier.padding(FhEspacio.m)) {
+                    Text(o.tipoMantenimiento, style = MaterialTheme.typography.titleSmall)
+                    Text("${o.local}${o.instalacion?.let { " · $it" }.orEmpty()}", style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("Próxima fecha: ${fechaCorta(o.proximaFecha)}", style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.padding(top = FhEspacio.xs))
+                    FilaChips {
+                        EstadoChip(if (o.responsable == "INQUILINO") "Responsable: inquilino (gestionas tú el proveedor)" else "Responsable: NHOOD (solo consulta)",
+                            if (o.responsable == "INQUILINO") Tono.PRIMARIO else Tono.NEUTRO)
+                        o.proveedorDeclarado?.let { d ->
+                            EstadoChip("Proveedor declarado: ${d.proveedor} · ${etiquetaDeclaracion(d.estado)}",
+                                when (d.estado) { "ACEPTADO" -> Tono.EXITO; "RECHAZADO" -> Tono.ERROR; else -> Tono.AVISO })
+                        }
+                    }
                     o.proveedorDeclarado?.let { d ->
-                        Text("Proveedor declarado: ${d.proveedor} · ${etiquetaDeclaracion(d.estado)}")
                         d.motivoRevision?.takeIf { d.estado == "RECHAZADO" }?.let { Text("Motivo: $it", color = MaterialTheme.colorScheme.error) }
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -138,20 +157,27 @@ fun MantenimientosInquilinoScreen(
 
     ScreenScaffold(title = "Mantenimientos", subtitle = titulo, onAction = onBack, scrollable = true) {
         MensajesFlujo(flujo)
-        if (!flujo.loading && flujo.mantenimientosInquilino.isEmpty() && flujo.error == null) Text("Sin mantenimientos en tu ocupación.")
+        if (!flujo.loading && flujo.mantenimientosInquilino.isEmpty() && flujo.error == null) EstadoVacio("Sin mantenimientos en tu ocupación.")
         flujo.mantenimientosInquilino.forEach { m ->
             val acciones = m.accionesPermitidas.orEmpty()
-            Card(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-                Column(modifier = Modifier.padding(12.dp)) {
-                    Text("${m.fechaProgramada} · ${etiquetaEstadoInquilino(m.estado, m.historicoP5)}", fontWeight = FontWeight.Bold)
+            Card(
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+                modifier = Modifier.fillMaxWidth().padding(vertical = FhEspacio.xs)
+            ) {
+                Column(modifier = Modifier.padding(FhEspacio.m)) {
+                    Text(fechaCorta(m.fechaProgramada), style = MaterialTheme.typography.titleSmall)
+                    FilaChips {
+                        EstadoChip(etiquetaEstadoInquilino(m.estado, m.historicoP5), if (m.historicoP5) Tono.HISTORICO else tonoEstado(m.estado))
+                    }
                     // FH-006 / P6-D3-6: un registro P5 conserva su estado real, pero no acredita cumplimiento.
                     if (m.historicoP5) {
                         Text("Histórico P5 — sin validación: no acredita cumplimiento.", color = MaterialTheme.colorScheme.tertiary,
                             style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
                     }
-                    m.descripcion?.let { Text(it) }
-                    m.fechaPrevistaInquilino?.let { Text("Fecha prevista: $it") }
-                    Text("Proveedor asignado: ${m.proveedorAsignado ?: "sin asignar"}")
+                    m.descripcion?.let { Text(it, modifier = Modifier.padding(top = FhEspacio.xs)) }
+                    m.fechaPrevistaInquilino?.let { Text("Fecha prevista: ${fechaCorta(it)}", style = MaterialTheme.typography.bodyMedium) }
+                    Text("Proveedor asignado: ${m.proveedorAsignado ?: "sin asignar"}", style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
                     m.cumplimiento?.let { c ->
                         CumplimientoCertificados(c, enabled = !flujo.loading) { cert -> descargar(cert.id, cert.nombre) }
                     }
@@ -190,17 +216,24 @@ fun SolicitudesInquilinoScreen(flujo: FlujoViewModel, onBack: () -> Unit) {
     LaunchedEffect(Unit) { flujo.limpiarMensajes(); flujo.cargarSolicitudesInquilino() }
     ScreenScaffold(title = "Mis solicitudes", subtitle = "Proveedores nuevos", onAction = onBack, scrollable = true) {
         MensajesFlujo(flujo)
-        if (!flujo.loading && flujo.solicitudesInquilino.isEmpty() && flujo.error == null) Text("No has enviado solicitudes.")
+        if (!flujo.loading && flujo.solicitudesInquilino.isEmpty() && flujo.error == null) EstadoVacio("No has enviado solicitudes.", FhIcons.Solicitud)
         flujo.solicitudesInquilino.forEach { s -> TarjetaSolicitud(s) }
     }
 }
 
 @Composable
 private fun TarjetaSolicitud(s: SolicitudProveedorDto, contenido: @Composable ColumnScope.() -> Unit = {}) {
-    Card(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-        Column(modifier = Modifier.padding(12.dp)) {
-            Text("${s.razonSocial} · ${s.estado}", fontWeight = FontWeight.Bold)
-            Text(listOfNotNull(s.cif, s.inquilino, fechaHora(s.createdAt)).joinToString(" · "), style = MaterialTheme.typography.bodySmall)
+    Card(
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+        modifier = Modifier.fillMaxWidth().padding(vertical = FhEspacio.xs)
+    ) {
+        Column(modifier = Modifier.padding(FhEspacio.m)) {
+            Text(s.razonSocial, style = MaterialTheme.typography.titleSmall)
+            FilaChips {
+                EstadoChip(etiquetaEstadoSolicitud(s.estado), when (s.estado) { "ATENDIDA" -> Tono.EXITO; "RECHAZADA" -> Tono.ERROR; else -> Tono.AVISO })
+            }
+            Text(listOfNotNull(s.cif, s.inquilino, fechaHora(s.createdAt)).joinToString(" · "), style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
             s.proveedor?.let { Text("Empresa dada de alta: $it") }
             s.respuesta?.let { Text("Respuesta: $it") }
             contenido()
@@ -216,13 +249,17 @@ fun DeclaracionesScreen(flujo: FlujoViewModel, onBack: () -> Unit) {
     var revisando by remember { mutableStateOf<Pair<DeclaracionPendienteDto, Boolean>?>(null) }
     ScreenScaffold(title = "Proveedores declarados", subtitle = "Pendientes de revisión", onAction = onBack, scrollable = true) {
         MensajesFlujo(flujo)
-        if (!flujo.loading && flujo.declaraciones.isEmpty() && flujo.error == null) Text("No hay declaraciones pendientes.")
+        if (!flujo.loading && flujo.declaraciones.isEmpty() && flujo.error == null) EstadoVacio("No hay declaraciones pendientes.", FhIcons.Hecho)
         flujo.declaraciones.forEach { d ->
-            Card(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-                Column(modifier = Modifier.padding(12.dp)) {
-                    Text("${d.proveedor}${d.cif?.let { " · $it" }.orEmpty()}", fontWeight = FontWeight.Bold)
-                    Text("${d.tipoMantenimiento} · ${d.local} · ${d.inquilino}")
-                    Text("Declarado: ${fechaHora(d.declaradoAt)}", style = MaterialTheme.typography.bodySmall)
+            Card(
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+                modifier = Modifier.fillMaxWidth().padding(vertical = FhEspacio.xs)
+            ) {
+                Column(modifier = Modifier.padding(FhEspacio.m)) {
+                    Text("${d.proveedor}${d.cif?.let { " · $it" }.orEmpty()}", style = MaterialTheme.typography.titleSmall)
+                    Text("${d.tipoMantenimiento} · ${d.local} · ${d.inquilino}", style = MaterialTheme.typography.bodyMedium)
+                    Text("Declarado: ${fechaHora(d.declaradoAt)}", style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         Button(onClick = { revisando = d to true }, enabled = !flujo.loading) { Text("Aceptar") }
                         OutlinedButton(onClick = { revisando = d to false }, enabled = !flujo.loading) { Text("Rechazar") }
@@ -253,7 +290,7 @@ fun SolicitudesGestionScreen(flujo: FlujoViewModel, esAdmin: Boolean, onBack: ()
     var resolviendo by remember { mutableStateOf<Pair<SolicitudProveedorDto, Boolean>?>(null) }
     ScreenScaffold(title = "Solicitudes de proveedor", subtitle = if (esAdmin) "Administración" else "Consulta", onAction = onBack, scrollable = true) {
         MensajesFlujo(flujo)
-        if (!flujo.loading && flujo.solicitudesGestion.isEmpty() && flujo.error == null) Text("No hay solicitudes.")
+        if (!flujo.loading && flujo.solicitudesGestion.isEmpty() && flujo.error == null) EstadoVacio("No hay solicitudes.", FhIcons.Solicitud)
         flujo.solicitudesGestion.forEach { s ->
             TarjetaSolicitud(s) {
                 if (esAdmin && s.estado == "PENDIENTE") Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -295,7 +332,7 @@ fun SolicitudesGestionScreen(flujo: FlujoViewModel, esAdmin: Boolean, onBack: ()
 @Composable
 fun SinPermisosScreen(onLogout: () -> Unit) {
     ScreenScaffold(title = "Sin acceso", subtitle = "Rol no reconocido", onAction = onLogout, actionLabel = "Salir") {
-        Text("Tu usuario no tiene un rol con acceso a la aplicación. Contacta con el administrador.")
+        Mensaje("Tu usuario no tiene un rol con acceso a la aplicación. Contacta con el administrador.", Tono.AVISO)
     }
 }
 
@@ -317,13 +354,20 @@ internal fun rememberDescargaDocumento(flujo: FlujoViewModel): (Long, String) ->
 // Cumplimiento aprobado y sus certificados. Solo llegan certificados VALIDO + COMPARTIDO de la ocupacion del inquilino.
 @Composable
 internal fun CumplimientoCertificados(c: CumplimientoInquilinoDto, enabled: Boolean, onDescargar: (CertificadoInquilinoDto) -> Unit) {
-    Text("Cumplimiento aprobado: ${c.fechaEjecucion.orEmpty()} · ${etiquetaResultado(c.resultado)}", color = MaterialTheme.colorScheme.primary)
+    FilaChips(Modifier.padding(top = FhEspacio.xs)) {
+        EstadoChip("Cumplimiento aprobado", Tono.EXITO, FhIcons.Verificado)
+        EstadoChip(etiquetaResultado(c.resultado), Tono.NEUTRO)
+    }
+    c.fechaEjecucion?.let {
+        Text("Ejecución ${fechaCorta(it)}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
     if (c.certificados.isNullOrEmpty()) Text("Sin certificados compartidos.", style = MaterialTheme.typography.bodySmall)
     c.certificados.orEmpty().forEach { cert ->
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(cert.nombre, modifier = Modifier.weight(1f))
-            TextButton(onClick = { onDescargar(cert) }, enabled = enabled) { Text("Descargar") }
-        }
+        FilaDocumento(
+            nombre = cert.nombre,
+            detalle = "Certificado compartido",
+            accion = { TextButton(onClick = { onDescargar(cert) }, enabled = enabled) { Text("Descargar") } }
+        )
     }
 }
 
