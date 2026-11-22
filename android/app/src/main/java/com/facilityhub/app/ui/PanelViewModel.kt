@@ -37,11 +37,17 @@ class PanelViewModel(application: Application) : AndroidViewModel(application) {
     private val sesionValida: Boolean
         get() = tokenStore.token != null && tokenStore.role in ROLES_PANEL
 
+    // FH-009 / R4: recarga pedida por el usuario (deslizar o «Actualizar»). Los datos visibles se mantienen hasta que
+    // llegan los nuevos; si la recarga falla, siguen visibles junto al aviso de error.
+    var refrescando by mutableStateOf(false); private set
+
+    fun refrescar() = cargar(manual = true)
+
     // Recarga resumen y listado del filtro actual (al abrir el panel y al volver a el).
-    fun cargar() {
+    fun cargar(manual: Boolean = false) {
         if (!sesionValida || loading) return
         viewModelScope.launch {
-            loading = true; error = null
+            loading = true; error = null; refrescando = manual
             try {
                 // coroutineScope: un fallo de red en una de las dos peticiones se propaga a este try (sin cerrar la app).
                 coroutineScope {
@@ -54,7 +60,7 @@ class PanelViewModel(application: Application) : AndroidViewModel(application) {
             } catch (e: Exception) {
                 tratar(e)
             } finally {
-                loading = false
+                loading = false; refrescando = false
             }
         }
     }
