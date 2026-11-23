@@ -55,7 +55,7 @@ fun HistorialLocalScreen(
 internal fun EstadoHistorial(historial: HistorialViewModel, flujo: FlujoViewModel, localId: Long) {
     EstadoCargando(historial.loading)
     MensajesFlujo(flujo)
-    historial.error?.let { msg -> EstadoError(msg, enabled = !historial.loading) { historial.cargar(localId) } }
+    historial.error?.let { msg -> EstadoError(msg, enabled = !historial.loading) { historial.cargar(localId, forzar = true) } }
     val vacio = if (historial.esGestion) historial.gestion.isEmpty() else historial.inquilino.isEmpty()
     if (historial.cargado && !historial.loading && historial.error == null && vacio) {
         EstadoVacio(

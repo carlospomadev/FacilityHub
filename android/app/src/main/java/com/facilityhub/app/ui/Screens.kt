@@ -240,15 +240,14 @@ fun CentrosScreen(
             Spacer(Modifier.height(FhEspacio.m))
         }
 
-        EstadoCargando(vm.loading)
-        vm.error?.let { EstadoError(it, enabled = !vm.loading) { vm.cargarCentros() } }
+        EstadoLectura(vm.lecCentros) { vm.cargarCentros(forzar = true) }
 
         SectionTitle("Centros comerciales")
 
         LazyColumn(
             verticalArrangement = Arrangement.spacedBy(FhEspacio.s)
         ) {
-            items(vm.centros) { centro ->
+            items(vm.centros, key = { it.id }) { centro ->
                 TarjetaLista(centro.nombre, onClick = { onCentro(centro) }) {
                     TextoSecundario(listOfNotNull(centro.codigo, centro.ciudad).joinToString(" · "))
                 }
@@ -275,13 +274,12 @@ fun LocalesScreen(
         subtitle = centroNombre,
         onAction = onBack
     ) {
-        EstadoCargando(vm.loading)
-        vm.error?.let { EstadoError(it, enabled = !vm.loading) { vm.cargarLocales(centroId) } }
+        EstadoLectura(vm.lecLocales) { vm.cargarLocales(centroId, forzar = true) }
 
         LazyColumn(
             verticalArrangement = Arrangement.spacedBy(FhEspacio.s)
         ) {
-            items(vm.locales) { local ->
+            items(vm.locales, key = { it.id }) { local ->
                 TarjetaLista(local.nombre ?: local.codigo, onClick = { onLocal(local) }) {
                     TextoSecundario(listOfNotNull(local.codigo, local.planta, local.ubicacion).joinToString(" · "))
                 }
@@ -304,29 +302,29 @@ fun LocalDetalleScreen(
         vm.cargarDetalleLocal(localId)
     }
 
-    ScreenScaffold(
+    PantallaLista(
         title = localNombre,
         subtitle = "Detalle del local",
-        onAction = onBack,
-        scrollable = true
+        onAction = onBack
     ) {
-        EstadoCargando(vm.loading)
-        vm.error?.let { EstadoError(it, enabled = !vm.loading) { vm.cargarDetalleLocal(localId) } }
+        item { EstadoLectura(vm.lecLocal) { vm.cargarDetalleLocal(localId, forzar = true) } }
 
         vm.inquilino?.let { inquilino ->
-            SectionTitle("Inquilino actual")
-            Text(
-                text = inquilino.nombreComercial ?: inquilino.razonSocial,
-                style = MaterialTheme.typography.bodyLarge,
-                fontWeight = FontWeight.SemiBold
-            )
-            inquilino.emailContacto?.takeIf { it.isNotBlank() }?.let { TextoSecundario(it) }
-            Spacer(modifier = Modifier.height(FhEspacio.l))
+            item {
+                SectionTitle("Inquilino actual")
+                Text(
+                    text = inquilino.nombreComercial ?: inquilino.razonSocial,
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.SemiBold
+                )
+                inquilino.emailContacto?.takeIf { it.isNotBlank() }?.let { TextoSecundario(it) }
+                Spacer(modifier = Modifier.height(FhEspacio.l))
+            }
         }
 
-        SectionTitle("Instalaciones")
+        item { SectionTitle("Instalaciones") }
 
-        vm.instalaciones.forEach { instalacion ->
+        items(vm.instalaciones, key = { "ins-${it.id}" }) { instalacion ->
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 2.dp)) {
                 Text(instalacion.nombre, modifier = Modifier.weight(1f))
                 EstadoChip(etiquetaEstadoInstalacion(instalacion.estado),
@@ -334,21 +332,23 @@ fun LocalDetalleScreen(
             }
         }
 
-        Spacer(modifier = Modifier.height(FhEspacio.l))
+        item {
+            Spacer(modifier = Modifier.height(FhEspacio.l))
 
-        // FH-006 / P6-D3-4: historial del local para gestion (el INQUILINO accede desde «Mis obligaciones»).
-        if (vm.puedeGestionar) {
-            OutlinedButton(onClick = onHistorial, modifier = Modifier.fillMaxWidth()) {
-                Icon(FhIcons.Historico, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(FhEspacio.s))
-                Text("Historial de mantenimientos")
+            // FH-006 / P6-D3-4: historial del local para gestion (el INQUILINO accede desde «Mis obligaciones»).
+            if (vm.puedeGestionar) {
+                OutlinedButton(onClick = onHistorial, modifier = Modifier.fillMaxWidth()) {
+                    Icon(FhIcons.Historico, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(FhEspacio.s))
+                    Text("Historial de mantenimientos")
+                }
+                Spacer(modifier = Modifier.height(FhEspacio.m))
             }
-            Spacer(modifier = Modifier.height(FhEspacio.m))
+
+            SectionTitle("Obligaciones de mantenimiento")
         }
 
-        SectionTitle("Obligaciones de mantenimiento")
-
-        vm.obligaciones.forEach { obligacion ->
+        items(vm.obligaciones, key = { "obl-${it.id}" }) { obligacion ->
             Box(Modifier.padding(vertical = FhEspacio.xs)) {
                 TarjetaLista(obligacion.tipoMantenimiento, onClick = { onObligacion(obligacion) }) {
                     TextoSecundario("Próxima fecha: ${fechaCorta(obligacion.proximaFecha)}")
@@ -369,11 +369,12 @@ fun MantenimientosScreen(
     onIntervenciones: (MantenimientoDto) -> Unit = {},
     onBack: () -> Unit
 ) {
-    var fecha by remember {
+    // FH-009 / R7: el formulario se conserva al abrir Documentos o Intervenciones y volver.
+    var fecha by rememberSaveable(obligacion.id) {
         mutableStateOf(obligacion.proximaFecha)
     }
 
-    var descripcion by remember {
+    var descripcion by rememberSaveable(obligacion.id) {
         mutableStateOf("")
     }
 
@@ -382,7 +383,7 @@ fun MantenimientosScreen(
         vm.obligaciones.firstOrNull { it.id == obligacion.id }?.proximaFecha
             ?: obligacion.proximaFecha
 
-    var fechaPorDefecto by remember {
+    var fechaPorDefecto by rememberSaveable(obligacion.id) {
         mutableStateOf(obligacion.proximaFecha)
     }
 
@@ -395,36 +396,39 @@ fun MantenimientosScreen(
     }
 
     LaunchedEffect(obligacion.id) {
+        vm.clearError()
         vm.cargarMantenimientos(obligacion.id)
     }
 
-    ScreenScaffold(
+    PantallaLista(
         title = "Mantenimientos",
         subtitle = obligacion.tipoMantenimiento,
-        onAction = onBack,
-        scrollable = true
+        onAction = onBack
     ) {
-        Text(
-            text = "Próxima fecha: ${fechaCorta(proximaFecha)}",
-            style = MaterialTheme.typography.bodyLarge
-        )
+        item {
+            Text(
+                text = "Próxima fecha: ${fechaCorta(proximaFecha)}",
+                style = MaterialTheme.typography.bodyLarge
+            )
 
-        EstadoCargando(vm.loading)
-        vm.error?.let { EstadoError(it) }
+            EstadoLectura(vm.lecMantenimientos) { vm.cargarMantenimientos(obligacion.id, forzar = true) }
+            // Estado de la ultima operacion (crear, iniciar).
+            EstadoCargando(vm.loading)
+            vm.error?.let { EstadoError(it) }
+        }
 
         // Crear ejecuciones solo para gestion (ADMIN/EXPLOTACION); el INQUILINO solo consulta.
-        if (vm.puedeGestionar) {
+        if (vm.puedeGestionar) item {
             Spacer(modifier = Modifier.height(FhEspacio.m))
 
             SectionTitle("Nueva ejecución")
 
-            // R7 sustituira este campo por un selector de fecha; la API sigue recibiendo AAAA-MM-DD.
-            OutlinedTextField(
-                value = fecha,
-                onValueChange = { fecha = it },
-                label = { Text("Fecha (AAAA-MM-DD)") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth()
+            // FH-009 / R7: selector de fecha; la API sigue recibiendo AAAA-MM-DD.
+            CampoFecha(
+                valor = fecha,
+                onValor = { fecha = it },
+                etiqueta = "Fecha programada",
+                enabled = !vm.loading
             )
 
             Spacer(modifier = Modifier.height(FhEspacio.s))
@@ -448,17 +452,19 @@ fun MantenimientosScreen(
                         descripcion = ""
                     }
                 },
-                enabled = !vm.loading
+                enabled = !vm.loading && fecha.isNotBlank()
             ) {
                 Text("Crear mantenimiento")
             }
         }
 
-        Spacer(modifier = Modifier.height(FhEspacio.l))
+        item {
+            Spacer(modifier = Modifier.height(FhEspacio.l))
+            SectionTitle("Histórico / programados")
+            if (vm.lecMantenimientos.vacia(vm.mantenimientos)) EstadoVacio("Sin mantenimientos registrados.")
+        }
 
-        SectionTitle("Histórico / programados")
-
-        vm.mantenimientos.forEach { mantenimiento ->
+        items(vm.mantenimientos, key = { it.id }) { mantenimiento ->
             Card(
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
                 modifier = Modifier
@@ -541,48 +547,52 @@ fun DocumentosScreen(
     }
 
     LaunchedEffect(mantenimientoId) {
+        vm.clearError()
         vm.cargarDocumentos(mantenimientoId)
     }
 
-    ScreenScaffold(
+    PantallaLista(
         title = "Documentos",
         subtitle = titulo,
-        onAction = onBack,
-        scrollable = true
+        onAction = onBack
     ) {
-        // Adjuntar solo para gestion (ADMIN/EXPLOTACION).
-        if (vm.puedeGestionar) {
-            Button(
-                onClick = {
-                    if (!selectorAbierto) {
-                        selectorAbierto = true
-                        selector.launch(TIPOS_DOCUMENTO)
-                    }
-                },
-                enabled = !vm.loading && !selectorAbierto
-            ) {
-                Text("Adjuntar archivo")
+        item {
+            // Adjuntar solo para gestion (ADMIN/EXPLOTACION).
+            if (vm.puedeGestionar) {
+                Button(
+                    onClick = {
+                        if (!selectorAbierto) {
+                            selectorAbierto = true
+                            selector.launch(TIPOS_DOCUMENTO)
+                        }
+                    },
+                    enabled = !vm.loading && !selectorAbierto
+                ) {
+                    Text("Adjuntar archivo")
+                }
+
+                Text(
+                    text = "PDF, JPEG o PNG · máximo 20 MB",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
 
-            Text(
-                text = "PDF, JPEG o PNG · máximo 20 MB",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            EstadoLectura(vm.lecDocumentos) { vm.cargarDocumentos(mantenimientoId, forzar = true) }
+            // Estado de la subida.
+            EstadoCargando(vm.loading)
+            vm.error?.let { EstadoError(it) }
+
+            Spacer(modifier = Modifier.height(FhEspacio.l))
+
+            SectionTitle("Documentos adjuntos")
+
+            if (vm.lecDocumentos.vacia(vm.documentos)) {
+                EstadoVacio("Sin documentos", FhIcons.Documento)
+            }
         }
 
-        EstadoCargando(vm.loading)
-        vm.error?.let { EstadoError(it) }
-
-        Spacer(modifier = Modifier.height(FhEspacio.l))
-
-        SectionTitle("Documentos adjuntos")
-
-        if (vm.documentos.isEmpty() && !vm.loading && vm.error == null) {
-            EstadoVacio("Sin documentos", FhIcons.Documento)
-        }
-
-        vm.documentos.forEach { documento ->
+        items(vm.documentos, key = { it.id }) { documento ->
             FilaDocumento(
                 nombre = documento.nombreOriginal,
                 detalle = listOfNotNull(
@@ -716,9 +726,8 @@ fun TrabajosScreen(
             onSeleccionar = { elegida = it }
         )
         Spacer(Modifier.height(FhEspacio.s))
-        EstadoCargando(vm.loading)
-        vm.error?.let { EstadoError(it, enabled = !vm.loading) { vm.cargarTrabajos() } }
-        if (!vm.loading && vm.error == null && lista.isEmpty()) {
+        EstadoLectura(vm.lecTrabajos) { vm.cargarTrabajos(forzar = true) }
+        if (vm.lecTrabajos.vacia(lista)) {
             EstadoVacio(
                 when (fase) {
                     FaseTrabajo.POR_HACER -> if (vm.trabajos.isEmpty()) "No tienes trabajos asignados." else "No tienes trabajos pendientes de hacer."
@@ -828,8 +837,8 @@ fun TrabajoDetalleScreen(
         onAction = onBack,
         scrollable = true
     ) {
-        EstadoCargando(vm.loading)
-        vm.error?.let { EstadoError(it, enabled = !vm.loading) { vm.cargarTrabajo(mantenimientoId) } }
+        // Reintentar recarga todo lo que muestra la pantalla (trabajo e intervenciones), no solo la primera lectura.
+        EstadoLectura(vm.lecTrabajo) { vm.cargarTrabajo(mantenimientoId); flujo?.cargarIntervencionesMantenimiento(mantenimientoId) }
 
         vm.trabajo?.let { trabajo ->
             SectionTitle("Datos del trabajo")

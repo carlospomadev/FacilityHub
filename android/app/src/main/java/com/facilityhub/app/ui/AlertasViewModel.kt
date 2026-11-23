@@ -10,6 +10,11 @@ import com.facilityhub.app.data.AlertaDto
 import com.facilityhub.app.data.FacilityRepository
 import com.facilityhub.app.data.NetworkProvider
 import com.facilityhub.app.data.TokenStore
+import android.os.SystemClock
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import retrofit2.HttpException
 
@@ -31,34 +36,57 @@ class AlertasViewModel(application: Application) : AndroidViewModel(application)
     private val sesionValida: Boolean
         get() = tokenStore.token != null && tokenStore.role in ROLES_CON_ALERTAS
 
+    // FH-009 / R7: corrutinas de la sesion (se cancelan al salir); la lista en curso se cancela si cambia el filtro.
+    private val sesion = AmbitoSesion(this)
+    private var trabajoLista: Job? = null
+    private var contadorEn = 0L
+
     // Contador para el icono de las pantallas raiz. Silencioso: un fallo no tapa la pantalla principal.
-    fun cargarContador() {
+    // FH-009 / R7: como mucho una peticion cada 15 s al cambiar de pestana (antes, una por cada cambio).
+    fun cargarContador(forzar: Boolean = false) {
         if (!sesionValida) return
-        viewModelScope.launch {
+        val ahora = SystemClock.elapsedRealtime()
+        if (!forzar && contadorEn != 0L && ahora - contadorEn < INTERVALO_CONTADOR_MS) return
+        contadorEn = ahora
+        sesion.scope.launch {
             try {
                 noLeidas = repository.alertasNoLeidas()
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: HttpException) {
+                contadorEn = 0L
                 if (e.code() == 401) sesionCaducada = true
             } catch (_: Exception) {
-                // sin conexion: se mantiene el ultimo valor
+                // sin conexion: se mantiene el ultimo valor y se reintenta en el siguiente cambio de pestana
+                contadorEn = 0L
             }
         }
     }
 
     fun cargar() {
         if (!sesionValida) return
-        viewModelScope.launch {
-            loading = true; error = null
+        trabajoLista?.cancel()
+        val solo = soloNoLeidas
+        loading = true; error = null
+        val nuevo = sesion.scope.launch {
             try {
-                alertas = repository.alertas(soloNoLeidas)
-                noLeidas = repository.alertasNoLeidas()
+                // Lista y contador en paralelo (antes en serie).
+                coroutineScope {
+                    val l = async { repository.alertas(solo) }
+                    val n = async { repository.alertasNoLeidas() }
+                    alertas = l.await(); noLeidas = n.await()
+                }
+                contadorEn = SystemClock.elapsedRealtime()
                 cargada = true
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 tratar(e)
             } finally {
-                loading = false
+                if (trabajoLista === coroutineContext[Job]) loading = false
             }
         }
+        trabajoLista = nuevo
     }
 
     fun cambiarFiltro(solo: Boolean) {
@@ -71,7 +99,7 @@ class AlertasViewModel(application: Application) : AndroidViewModel(application)
         if (loading) return
         if (alerta.leidaAt != null) { onHecho(); return }
         loading = true; error = null
-        viewModelScope.launch {
+        sesion.scope.launch {
             try {
                 val actualizada = repository.marcarAlertaLeida(alerta.id)
                 alertas = if (soloNoLeidas) alertas.filter { it.id != alerta.id } else alertas.map { if (it.id == alerta.id) actualizada else it }
@@ -86,6 +114,7 @@ class AlertasViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun limpiar() {
+        sesion.reiniciar(); trabajoLista = null; loading = false; contadorEn = 0L
         alertas = emptyList(); noLeidas = 0; soloNoLeidas = false; error = null; cargada = false; sesionCaducada = false
     }
 
@@ -101,5 +130,7 @@ class AlertasViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 }
+
+private const val INTERVALO_CONTADOR_MS = 15_000L
 
 private val ROLES_CON_ALERTAS = setOf("ADMIN", "EXPLOTACION", "INQUILINO", "PROVEEDOR")

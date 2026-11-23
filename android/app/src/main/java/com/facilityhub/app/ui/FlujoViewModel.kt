@@ -8,6 +8,7 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.facilityhub.app.data.*
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -44,6 +45,23 @@ class FlujoViewModel(application: Application) : AndroidViewModel(application) {
     // FH-009 / R3: un 401 indica sesion caducada o token no valido; la app vuelve al login.
     var sesionCaducada by mutableStateOf(false); private set
 
+    // FH-009 / R7: corrutinas de la sesion (se cancelan al salir) y una lectura con estado propio por pantalla. loading,
+    // error y aviso quedan para las operaciones (escrituras, descargas y busqueda de proveedor por CIF).
+    private val sesion = AmbitoSesion(this)
+    val lecIntervenciones = Lectura()
+    val lecIntervencion = Lectura()
+    val lecPendientes = Lectura()
+    val lecProveedores = Lectura()
+    val lecAsignacion = Lectura()
+    val lecDeclaraciones = Lectura()
+    val lecSolicitudesGestion = Lectura()
+    val lecObligacionesInquilino = Lectura()
+    val lecMantenimientosInquilino = Lectura()
+    val lecSolicitudesInquilino = Lectura()
+    private val lecturas = listOf(lecIntervenciones, lecIntervencion, lecPendientes, lecProveedores, lecAsignacion,
+        lecDeclaraciones, lecSolicitudesGestion, lecObligacionesInquilino, lecMantenimientosInquilino, lecSolicitudesInquilino)
+    private val caducar: () -> Unit = { sesionCaducada = true }
+
     fun limpiarMensajes() { error = null; aviso = null }
 
     // FH-009 / R6: ultimo comentario de «Pedir correccion» por intervencion (para «Mis trabajos» del PROVEEDOR). Se lee
@@ -52,15 +70,19 @@ class FlujoViewModel(application: Application) : AndroidViewModel(application) {
     var comentariosCorreccion by mutableStateOf<Map<Long, ValidacionDto>>(emptyMap()); private set
 
     fun cargarComentariosCorreccion(intervenciones: List<Long>) {
-        // Se conservan los ya cargados mientras llegan los nuevos (sin parpadeo) y se descartan los que ya no aplican.
+        // Se descartan los que ya no estan en correccion y solo se piden los que faltan (FH-009 / R7: antes se pedian
+        // todos cada vez que se mostraba «Mis trabajos»). Si una intervencion sale de correccion y vuelve a entrar, su
+        // motivo se pide de nuevo.
         comentariosCorreccion = comentariosCorreccion.filterKeys { it in intervenciones }
-        intervenciones.forEach { id ->
-            viewModelScope.launch {
+        intervenciones.filter { it !in comentariosCorreccion }.forEach { id ->
+            sesion.scope.launch {
                 try {
                     val v = repository.intervencion(id).validaciones.orEmpty()
                         .filter { it.accion == ACCION_SOLICITAR_CORRECCION }
                         .maxByOrNull { it.fecha.orEmpty() }
                     if (v != null) comentariosCorreccion = comentariosCorreccion + (id to v)
+                } catch (e: CancellationException) {
+                    throw e
                 } catch (e: Exception) {
                     if (e is HttpException && e.code() == 401) sesionCaducada = true
                 }
@@ -70,42 +92,66 @@ class FlujoViewModel(application: Application) : AndroidViewModel(application) {
 
     // ---------- Lecturas ----------
 
-    fun cargarIntervencionesMantenimiento(mantenimientoId: Long) {
-        intervencionesMantenimiento = emptyList()
-        lectura { intervencionesMantenimiento = repository.intervenciones(mantenimientoId) }
+    // FH-009 / R7: cada lectura conserva sus datos al recargar la misma entidad y los limpia si cambia (otra
+    // intervencion, mantenimiento u obligacion). Las de detalle se piden siempre al abrirlas (reflejan acciones recientes);
+    // las listas, solo si hace falta (sin datos, error, cambios hechos desde la app o mas de un minuto).
+
+    fun cargarIntervencionesMantenimiento(mantenimientoId: Long) =
+        lecIntervenciones.lanzar(sesion.scope, mantenimientoId, { intervencionesMantenimiento = emptyList() },
+            { repository.intervenciones(mantenimientoId) }, { intervencionesMantenimiento = it }, caducar)
+
+    fun cargarIntervencion(id: Long) =
+        lecIntervencion.lanzar(sesion.scope, id, { intervencion = null }, { repository.intervencion(id) }, { intervencion = it }, caducar)
+
+    fun cargarPendientes(forzar: Boolean = false) {
+        if (!forzar && !lecPendientes.necesitaRecarga("pendientes")) return
+        lecPendientes.lanzar(sesion.scope, "pendientes", { pendientes = emptyList() }, { repository.pendientesValidacion() }, { pendientes = it }, caducar)
     }
 
-    fun cargarIntervencion(id: Long) {
-        intervencion = null
-        lectura { intervencion = repository.intervencion(id) }
+    fun cargarProveedores(forzar: Boolean = false) {
+        if (!forzar && !lecProveedores.necesitaRecarga("proveedores")) return
+        lecProveedores.lanzar(sesion.scope, "proveedores", { proveedores = emptyList() }, { repository.proveedores() }, { proveedores = it }, caducar)
     }
 
-    fun cargarPendientes() = lectura { pendientes = repository.pendientesValidacion() }
-    fun cargarProveedores() = lectura { proveedores = repository.proveedores() }
-    fun cargarDeclaraciones() = lectura { declaraciones = repository.declaracionesPendientes() }
-    fun cargarSolicitudesGestion() = lectura { solicitudesGestion = repository.solicitudesGestion() }
+    fun cargarDeclaraciones(forzar: Boolean = false) {
+        if (!forzar && !lecDeclaraciones.necesitaRecarga("declaraciones")) return
+        lecDeclaraciones.lanzar(sesion.scope, "declaraciones", { declaraciones = emptyList() },
+            { repository.declaracionesPendientes() }, { declaraciones = it }, caducar)
+    }
+
+    fun cargarSolicitudesGestion(forzar: Boolean = false) {
+        if (!forzar && !lecSolicitudesGestion.necesitaRecarga("solicitudes")) return
+        lecSolicitudesGestion.lanzar(sesion.scope, "solicitudes", { solicitudesGestion = emptyList() },
+            { repository.solicitudesGestion() }, { solicitudesGestion = it }, caducar)
+    }
 
     // Asignacion vigente del mantenimiento (gestion). 404 = sin asignacion, no es un error para el usuario.
-    fun cargarAsignacion(mantenimientoId: Long) {
-        asignacion = null; asignacionConsultada = false
-        lectura {
-            asignacion = try {
-                repository.asignacion(mantenimientoId)
-            } catch (e: HttpException) {
-                if (e.code() == 404) null else throw e
-            }
-            asignacionConsultada = true
-        }
+    fun cargarAsignacion(mantenimientoId: Long) =
+        lecAsignacion.lanzar(
+            sesion.scope, mantenimientoId,
+            limpiar = { asignacion = null; asignacionConsultada = false },
+            peticion = {
+                try { repository.asignacion(mantenimientoId) } catch (e: HttpException) { if (e.code() == 404) null else throw e }
+            },
+            aplicar = { asignacion = it; asignacionConsultada = true },
+            onSesionCaducada = caducar
+        )
+
+    fun cargarObligacionesInquilino(forzar: Boolean = false) {
+        if (!forzar && !lecObligacionesInquilino.necesitaRecarga("obligaciones")) return
+        lecObligacionesInquilino.lanzar(sesion.scope, "obligaciones", { obligacionesInquilino = emptyList() },
+            { repository.obligacionesInquilino() }, { obligacionesInquilino = it }, caducar)
     }
 
-    fun cargarObligacionesInquilino() = lectura { obligacionesInquilino = repository.obligacionesInquilino() }
+    fun cargarMantenimientosInquilino(obligacionId: Long) =
+        lecMantenimientosInquilino.lanzar(sesion.scope, obligacionId, { mantenimientosInquilino = emptyList() },
+            { repository.mantenimientosInquilino(obligacionId) }, { mantenimientosInquilino = it }, caducar)
 
-    fun cargarMantenimientosInquilino(obligacionId: Long) {
-        mantenimientosInquilino = emptyList()
-        lectura { mantenimientosInquilino = repository.mantenimientosInquilino(obligacionId) }
+    fun cargarSolicitudesInquilino(forzar: Boolean = false) {
+        if (!forzar && !lecSolicitudesInquilino.necesitaRecarga("solicitudes-inq")) return
+        lecSolicitudesInquilino.lanzar(sesion.scope, "solicitudes-inq", { solicitudesInquilino = emptyList() },
+            { repository.solicitudesInquilino() }, { solicitudesInquilino = it }, caducar)
     }
-
-    fun cargarSolicitudesInquilino() = lectura { solicitudesInquilino = repository.solicitudesInquilino() }
 
     // ---------- PROVEEDOR / gestion: intervenciones ----------
 
@@ -184,7 +230,7 @@ class FlujoViewModel(application: Application) : AndroidViewModel(application) {
 
     fun buscarProveedor(cif: String) {
         proveedorEncontrado = null
-        lectura { proveedorEncontrado = repository.buscarProveedor(cif.trim()) }
+        consulta { proveedorEncontrado = repository.buscarProveedor(cif.trim()) }
     }
 
     fun declararProveedor(obligacionId: Long, proveedorId: Long, onHecho: () -> Unit) = escritura {
@@ -217,9 +263,10 @@ class FlujoViewModel(application: Application) : AndroidViewModel(application) {
     // ---------- Descargas (el destino lo elige el usuario con el selector del sistema) ----------
 
     fun descargarDocumentoIntervencion(intervencionId: Long, documentoId: Long, destino: Uri) =
-        escritura { guardar(repository.descargarDocumentoIntervencion(intervencionId, documentoId), destino) }
+        escritura(cambiaDatos = false) { guardar(repository.descargarDocumentoIntervencion(intervencionId, documentoId), destino) }
 
-    fun descargarDocumento(documentoId: Long, destino: Uri) = escritura { guardar(repository.descargarDocumento(documentoId), destino) }
+    fun descargarDocumento(documentoId: Long, destino: Uri) =
+        escritura(cambiaDatos = false) { guardar(repository.descargarDocumento(documentoId), destino) }
 
     private suspend fun guardar(cuerpo: ResponseBody, destino: Uri) {
         withContext(Dispatchers.IO) {
@@ -233,6 +280,10 @@ class FlujoViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun limpiarSesion() {
+        // FH-009 / R7: se cancelan las peticiones de la sesion anterior antes de vaciar sus datos.
+        sesion.reiniciar()
+        lecturas.forEach { it.reiniciar() }
+        loading = false
         intervencionesMantenimiento = emptyList(); intervencion = null; pendientes = emptyList(); proveedores = emptyList()
         asignacion = null; declaraciones = emptyList(); solicitudesGestion = emptyList(); obligacionesInquilino = emptyList()
         mantenimientosInquilino = emptyList(); solicitudesInquilino = emptyList(); proveedorEncontrado = null
@@ -246,19 +297,24 @@ class FlujoViewModel(application: Application) : AndroidViewModel(application) {
         if (e is HttpException && e.code() == 401) sesionCaducada = true
     }
 
-    private fun lectura(block: suspend () -> Unit) {
-        viewModelScope.launch {
+    // Consulta puntual de un dialogo (busqueda por CIF): usa el estado de operacion, no el de una pantalla.
+    private fun consulta(block: suspend () -> Unit) {
+        sesion.scope.launch {
             loading = true; error = null
-            try { block() } catch (e: Exception) { fallo(e) } finally { loading = false }
+            try { block() } catch (e: CancellationException) { throw e } catch (e: Exception) { fallo(e) } finally { loading = false }
         }
     }
 
-    // Guarda sincrona: se marca ocupado antes de lanzar la corrutina; un segundo toque se ignora.
-    private fun escritura(block: suspend () -> Unit) {
+    // Guarda sincrona: se marca ocupado antes de lanzar la corrutina; un segundo toque se ignora. Una escritura correcta
+    // marca los datos como cambiados (FH-009 / R7): las listas afectadas se recargan al volver a ellas.
+    private fun escritura(cambiaDatos: Boolean = true, block: suspend () -> Unit) {
         if (loading) return
         loading = true; error = null; aviso = null
-        viewModelScope.launch {
-            try { block() } catch (e: Exception) { fallo(e) } finally { loading = false }
+        sesion.scope.launch {
+            try {
+                block()
+                if (cambiaDatos) CambiosDatos.marcar()
+            } catch (e: CancellationException) { throw e } catch (e: Exception) { fallo(e) } finally { loading = false }
         }
     }
 }

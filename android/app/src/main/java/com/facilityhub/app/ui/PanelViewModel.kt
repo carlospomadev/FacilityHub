@@ -12,6 +12,8 @@ import com.facilityhub.app.data.ResumenGestionDto
 import com.facilityhub.app.data.TokenStore
 import com.facilityhub.app.data.TrabajoGestionDto
 import kotlinx.coroutines.async
+import android.os.SystemClock
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import retrofit2.HttpException
@@ -41,12 +43,22 @@ class PanelViewModel(application: Application) : AndroidViewModel(application) {
     // llegan los nuevos; si la recarga falla, siguen visibles junto al aviso de error.
     var refrescando by mutableStateOf(false); private set
 
+    // FH-009 / R7: corrutinas de la sesion (se cancelan al salir) y vigencia de los datos mostrados.
+    private val sesion = AmbitoSesion(this)
+    private var cargadoEn = 0L
+    private var versionCargada = -1L
+
     fun refrescar() = cargar(manual = true)
 
-    // Recarga resumen y listado del filtro actual (al abrir el panel y al volver a el).
+    // Resumen y listado del filtro actual. Al abrir el panel o volver a el solo se piden si hace falta: sin datos, con
+    // error, tras cambios hechos desde la app (validar, asignar...) o pasado un minuto. «Actualizar» siempre recarga.
     fun cargar(manual: Boolean = false) {
         if (!sesionValida || loading) return
-        viewModelScope.launch {
+        val vigente = cargado && resumen != null && error == null && versionCargada == CambiosDatos.version &&
+            SystemClock.elapsedRealtime() - cargadoEn <= VIGENCIA_DATOS_MS
+        if (!manual && vigente) return
+        val version = CambiosDatos.version
+        sesion.scope.launch {
             loading = true; error = null; refrescando = manual
             try {
                 // coroutineScope: un fallo de red en una de las dos peticiones se propaga a este try (sin cerrar la app).
@@ -56,7 +68,9 @@ class PanelViewModel(application: Application) : AndroidViewModel(application) {
                     resumen = r.await()
                     trabajos = t.await()
                 }
-                cargado = true
+                cargado = true; cargadoEn = SystemClock.elapsedRealtime(); versionCargada = version
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 tratar(e)
             } finally {
@@ -71,11 +85,13 @@ class PanelViewModel(application: Application) : AndroidViewModel(application) {
         filtro = nuevo
         cargado = false
         trabajos = emptyList()
-        viewModelScope.launch {
+        sesion.scope.launch {
             loading = true; error = null
             try {
                 trabajos = repository.trabajosGestion(nuevo.name)
                 cargado = true
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 tratar(e)
             } finally {
@@ -85,6 +101,7 @@ class PanelViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun limpiar() {
+        sesion.reiniciar(); loading = false; refrescando = false; cargadoEn = 0L; versionCargada = -1L
         resumen = null; filtro = FiltroPanel.VENCIDOS; trabajos = emptyList(); error = null; cargado = false
         sesionCaducada = false
     }

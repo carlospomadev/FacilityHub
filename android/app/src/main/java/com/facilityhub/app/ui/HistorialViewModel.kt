@@ -5,13 +5,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
-import androidx.lifecycle.viewModelScope
 import com.facilityhub.app.data.FacilityRepository
 import com.facilityhub.app.data.HistorialGestionDto
 import com.facilityhub.app.data.HistorialInquilinoDto
 import com.facilityhub.app.data.NetworkProvider
 import com.facilityhub.app.data.TokenStore
-import kotlinx.coroutines.launch
 import retrofit2.HttpException
 
 // FH-006 / P6-D3-4: historial del local (GET /api/locales/{id}/historial). Solo lectura. El backend decide el contenido
@@ -24,51 +22,50 @@ class HistorialViewModel(application: Application) : AndroidViewModel(applicatio
     var localId by mutableStateOf<Long?>(null); private set
     var gestion by mutableStateOf<List<HistorialGestionDto>>(emptyList()); private set
     var inquilino by mutableStateOf<List<HistorialInquilinoDto>>(emptyList()); private set
-    var loading by mutableStateOf(false); private set
-    var error by mutableStateOf<String?>(null); private set
-    var cargado by mutableStateOf(false); private set
     // 401: la pantalla vuelve al login.
     var sesionCaducada by mutableStateOf(false); private set
+
+    // FH-009 / R7: estado propio de la lectura (por local) y corrutinas de la sesion. Antes, una peticion en curso hacia
+    // ignorar la del local nuevo; ahora la del local nuevo cancela la anterior y una respuesta tardia no la sobrescribe.
+    private val sesion = AmbitoSesion(this)
+    val lectura = Lectura()
+    val loading: Boolean get() = lectura.cargando
+    val error: String? get() = lectura.error
+    val cargado: Boolean get() = lectura.cargada
 
     val esGestion: Boolean get() = tokenStore.role in ROLES_PANEL
     private val sesionValida: Boolean
         get() = tokenStore.token != null && (esGestion || tokenStore.role == "INQUILINO")
 
-    fun cargar(id: Long) {
-        if (!sesionValida || loading) return
-        if (id != localId) {
-            localId = id; gestion = emptyList(); inquilino = emptyList(); cargado = false
-        }
-        viewModelScope.launch {
-            loading = true; error = null
-            try {
-                if (esGestion) gestion = repository.historialGestion(id) else inquilino = repository.historialInquilino(id)
-                cargado = true
-            } catch (e: Exception) {
-                tratar(e)
-            } finally {
-                loading = false
-            }
-        }
+    /** Pide el historial de [id] si hace falta (otro local, sin datos, con error, cambios hechos desde la app o caducado). */
+    fun cargar(id: Long, forzar: Boolean = false) {
+        if (!sesionValida) return
+        if (!forzar && !lectura.necesitaRecarga(id)) return
+        localId = id
+        val gestionPedida = esGestion
+        lectura.lanzar(
+            sesion.scope, id,
+            limpiar = { gestion = emptyList(); inquilino = emptyList() },
+            peticion = {
+                if (gestionPedida) repository.historialGestion(id) to emptyList<HistorialInquilinoDto>()
+                else emptyList<HistorialGestionDto>() to repository.historialInquilino(id)
+            },
+            aplicar = { (g, i) -> gestion = g; inquilino = i },
+            onSesionCaducada = { sesionCaducada = true },
+            mensaje = ::mensajeHistorial
+        )
     }
 
     fun limpiar() {
-        localId = null; gestion = emptyList(); inquilino = emptyList(); error = null; cargado = false; sesionCaducada = false
+        sesion.reiniciar(); lectura.reiniciar()
+        localId = null; gestion = emptyList(); inquilino = emptyList(); sesionCaducada = false
     }
 
-    private fun tratar(e: Exception) {
-        if (e is HttpException && e.code() == 401) {
-            sesionCaducada = true
-        }
-        // Sin autorizacion (401/403/404): no se sigue mostrando un historial cargado antes. Un error de conexion
-        // conserva los ultimos datos visibles junto al aviso.
-        if (e is HttpException && e.code() in setOf(401, 403, 404)) {
-            gestion = emptyList(); inquilino = emptyList(); cargado = false
-        }
-        error = when {
-            e is HttpException && e.code() == 403 -> "No tienes permiso para consultar este historial."
-            e is HttpException && e.code() == 404 -> "No tienes acceso al historial de este local o no existe."
-            else -> mensajeError(e)
-        }
+    // Sin autorizacion (401/403/404) Lectura deja de mostrar el historial cargado antes; un error de conexion conserva
+    // los ultimos datos visibles junto al aviso.
+    private fun mensajeHistorial(e: Exception): String = when {
+        e is HttpException && e.code() == 403 -> "No tienes permiso para consultar este historial."
+        e is HttpException && e.code() == 404 -> "No tienes acceso al historial de este local o no existe."
+        else -> mensajeError(e)
     }
 }

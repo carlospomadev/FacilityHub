@@ -13,6 +13,7 @@ import java.time.LocalDate
 import java.time.ZoneId
 import java.time.temporal.ChronoUnit
 import androidx.compose.foundation.layout.*
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -63,15 +64,17 @@ fun ObligacionesInquilinoScreen(
 
     ScreenScaffold(title = "Mis obligaciones", subtitle = local?.second?.let { "Mi local · $it" } ?: "Mi local · Inquilino", onAction = onBack) {
         val n = flujo.obligacionesInquilino.size
+        // FH-009 / R7: con fuente grande la pestana se queda en «Historial» (el local ya figura en el subtitulo).
+        val grande = LocalDensity.current.fontScale >= 1.3f
         PestanasInternas(
-            titulos = listOf("Obligaciones · $n", if (locales.size == 1) "Historial del local ${locales[0].second}" else "Historial"),
+            titulos = listOf("Obligaciones · $n", if (locales.size == 1 && !grande) "Historial del local ${locales[0].second}" else "Historial"),
             seleccionada = pestana,
             onSeleccionar = { pestana = it }
         )
         Spacer(Modifier.height(FhEspacio.s))
         if (pestana == 0) {
-            MensajesFlujo(flujo)
-            if (!flujo.loading && flujo.obligacionesInquilino.isEmpty() && flujo.error == null) {
+            MensajesFlujo(flujo, flujo.lecObligacionesInquilino) { flujo.cargarObligacionesInquilino(forzar = true) }
+            if (flujo.lecObligacionesInquilino.vacia(flujo.obligacionesInquilino)) {
                 EstadoVacio("No tienes obligaciones en locales con ocupación vigente.", FhIcons.Edificio)
             }
             LazyColumn(verticalArrangement = Arrangement.spacedBy(FhEspacio.s), contentPadding = PaddingValues(bottom = FhEspacio.l)) {
@@ -96,7 +99,11 @@ fun ObligacionesInquilinoScreen(
                 }
             }
             if (local == null) {
-                if (!flujo.loading) EstadoVacio("No tienes locales con ocupación vigente.", FhIcons.Edificio)
+                if (flujo.lecObligacionesInquilino.vacia(flujo.obligacionesInquilino)) {
+                    EstadoVacio("No tienes locales con ocupación vigente.", FhIcons.Edificio)
+                } else {
+                    EstadoLectura(flujo.lecObligacionesInquilino) { flujo.cargarObligacionesInquilino(forzar = true) }
+                }
             } else {
                 EstadoHistorial(historial, flujo, local.first)
                 LazyColumn(contentPadding = PaddingValues(bottom = FhEspacio.l)) {
@@ -232,10 +239,12 @@ fun MantenimientosInquilinoScreen(
     var asignarDe by remember { mutableStateOf<MantenimientoInquilinoDetalleDto?>(null) }
     val descargar = rememberDescargaDocumento(flujo)
 
-    ScreenScaffold(title = "Mantenimientos", subtitle = titulo, onAction = onBack, scrollable = true) {
-        MensajesFlujo(flujo)
-        if (!flujo.loading && flujo.mantenimientosInquilino.isEmpty() && flujo.error == null) EstadoVacio("Sin mantenimientos en tu ocupación.")
-        flujo.mantenimientosInquilino.forEach { m ->
+    PantallaLista(title = "Mantenimientos", subtitle = titulo, onAction = onBack) {
+        item {
+            MensajesFlujo(flujo, flujo.lecMantenimientosInquilino) { flujo.cargarMantenimientosInquilino(obligacionId) }
+            if (flujo.lecMantenimientosInquilino.vacia(flujo.mantenimientosInquilino)) EstadoVacio("Sin mantenimientos en tu ocupación.")
+        }
+        items(flujo.mantenimientosInquilino, key = { it.id }) { m ->
             val acciones = m.accionesPermitidas.orEmpty()
             Card(
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
@@ -272,8 +281,11 @@ fun MantenimientosInquilinoScreen(
         AlertDialog(
             onDismissRequest = { fechaDe = null },
             title = { Text("Fecha prevista") },
-            text = { OutlinedTextField(fecha, { fecha = it }, label = { Text("AAAA-MM-DD") }, singleLine = true) },
-            confirmButton = { TextButton(onClick = { fechaDe = null; flujo.fijarFechaPrevista(m, fecha) }, enabled = !flujo.loading) { Text("Guardar") } },
+            // FH-009 / R7: selector de fecha (la API sigue recibiendo AAAA-MM-DD).
+            text = { CampoFecha(valor = fecha, onValor = { fecha = it }, etiqueta = "Fecha prevista") },
+            confirmButton = {
+                TextButton(onClick = { fechaDe = null; flujo.fijarFechaPrevista(m, fecha) }, enabled = !flujo.loading && fecha.isNotBlank()) { Text("Guardar") }
+            },
             dismissButton = { TextButton(onClick = { fechaDe = null }) { Text("Cancelar") } }
         )
     }
@@ -291,10 +303,12 @@ fun MantenimientosInquilinoScreen(
 @Composable
 fun SolicitudesInquilinoScreen(flujo: FlujoViewModel, onBack: () -> Unit) {
     LaunchedEffect(Unit) { flujo.limpiarMensajes(); flujo.cargarSolicitudesInquilino() }
-    ScreenScaffold(title = "Mis solicitudes", subtitle = "Proveedores nuevos", onAction = onBack, scrollable = true) {
-        MensajesFlujo(flujo)
-        if (!flujo.loading && flujo.solicitudesInquilino.isEmpty() && flujo.error == null) EstadoVacio("No has enviado solicitudes.", FhIcons.Solicitud)
-        flujo.solicitudesInquilino.forEach { s -> TarjetaSolicitud(s) }
+    PantallaLista(title = "Mis solicitudes", subtitle = "Proveedores nuevos", onAction = onBack) {
+        item {
+            MensajesFlujo(flujo, flujo.lecSolicitudesInquilino) { flujo.cargarSolicitudesInquilino(forzar = true) }
+            if (flujo.lecSolicitudesInquilino.vacia(flujo.solicitudesInquilino)) EstadoVacio("No has enviado solicitudes.", FhIcons.Solicitud)
+        }
+        items(flujo.solicitudesInquilino, key = { it.id }) { s -> TarjetaSolicitud(s) }
     }
 }
 
@@ -324,10 +338,12 @@ private fun TarjetaSolicitud(s: SolicitudProveedorDto, contenido: @Composable Co
 fun DeclaracionesScreen(flujo: FlujoViewModel, onBack: () -> Unit) {
     LaunchedEffect(Unit) { flujo.limpiarMensajes(); flujo.cargarDeclaraciones() }
     var revisando by remember { mutableStateOf<Pair<DeclaracionPendienteDto, Boolean>?>(null) }
-    ScreenScaffold(title = "Proveedores declarados", subtitle = "Pendientes de revisión", onAction = onBack, scrollable = true) {
-        MensajesFlujo(flujo)
-        if (!flujo.loading && flujo.declaraciones.isEmpty() && flujo.error == null) EstadoVacio("No hay declaraciones pendientes.", FhIcons.Hecho)
-        flujo.declaraciones.forEach { d ->
+    PantallaLista(title = "Proveedores declarados", subtitle = "Pendientes de revisión", onAction = onBack) {
+        item {
+            MensajesFlujo(flujo, flujo.lecDeclaraciones) { flujo.cargarDeclaraciones(forzar = true) }
+            if (flujo.lecDeclaraciones.vacia(flujo.declaraciones)) EstadoVacio("No hay declaraciones pendientes.", FhIcons.Hecho)
+        }
+        items(flujo.declaraciones, key = { it.id }) { d ->
             Card(
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
                 modifier = Modifier.fillMaxWidth().padding(vertical = FhEspacio.xs)
@@ -365,10 +381,13 @@ fun DeclaracionesScreen(flujo: FlujoViewModel, onBack: () -> Unit) {
 fun SolicitudesGestionScreen(flujo: FlujoViewModel, esAdmin: Boolean, onBack: () -> Unit) {
     LaunchedEffect(Unit) { flujo.limpiarMensajes(); flujo.cargarSolicitudesGestion(); if (esAdmin) flujo.cargarProveedores() }
     var resolviendo by remember { mutableStateOf<Pair<SolicitudProveedorDto, Boolean>?>(null) }
-    ScreenScaffold(title = "Solicitudes de proveedor", subtitle = if (esAdmin) "Administración" else "Consulta", onAction = onBack, scrollable = true) {
-        MensajesFlujo(flujo)
-        if (!flujo.loading && flujo.solicitudesGestion.isEmpty() && flujo.error == null) EstadoVacio("No hay solicitudes.", FhIcons.Solicitud)
-        flujo.solicitudesGestion.forEach { s ->
+    PantallaLista(title = "Solicitudes de proveedor", subtitle = if (esAdmin) "Administración" else "Consulta", onAction = onBack) {
+        item {
+            MensajesFlujo(flujo, flujo.lecSolicitudesGestion) { flujo.cargarSolicitudesGestion(forzar = true) }
+            if (esAdmin) EstadoLectura(flujo.lecProveedores) { flujo.cargarProveedores(forzar = true) }
+            if (flujo.lecSolicitudesGestion.vacia(flujo.solicitudesGestion)) EstadoVacio("No hay solicitudes.", FhIcons.Solicitud)
+        }
+        items(flujo.solicitudesGestion, key = { it.id }) { s ->
             TarjetaSolicitud(s) {
                 if (esAdmin && s.estado == "PENDIENTE") Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     Button(onClick = { resolviendo = s to true }, enabled = !flujo.loading) { Text("Atender") }
