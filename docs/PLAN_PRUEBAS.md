@@ -18,6 +18,7 @@ Comprobar de forma reproducible que FacilityHub funciona de extremo a extremo (P
 **Resultado esperado:**
 - el log muestra `Successfully applied 9 migrations … now at version v9`;
 - `flyway_schema_history` contiene las versiones 1 a 9, todas correctas;
+- V10 aparece como pendiente y **no se aplica**: está fuera del destino por defecto, `FACILITYHUB_FLYWAY_TARGET=9`. Solo se aplica en una base desechable autorizada, con `FACILITYHUB_FLYWAY_TARGET=10` (ver `backend/README.md`);
 - `GET http://localhost:8080/actuator/health` devuelve `{"status":"UP"}`.
 
 ## P-02 Validación automática de la API
@@ -54,9 +55,11 @@ $env:FACILITYHUB_ADMIN_PASSWORD = "<contraseña de admin@facilityhub.local>"
 1. Abrir `android/` en Android Studio y ejecutar la app en un emulador. El backend se alcanza en `http://10.0.2.2:8080/`.
 2. **EXPLOTACION:**
    - Centros → Locales → Detalle del local → Historial;
+   - Detalle del local → **Registrar instalación** y **Registrar obligación** (tipo del catálogo, periodicidad y próxima fecha calculada);
+   - Centros → Locales → **Instalaciones del centro** → alta de una instalación o una obligación de zona común;
    - Panel de Explotación con sus filtros;
    - Validaciones → Intervención (Aprobar o Pedir corrección).
-3. **INQUILINO:** Mis obligaciones → Mantenimientos (certificados compartidos) → Historial del local y descarga de un certificado.
+3. **INQUILINO:** Mi local (obligaciones) → Mantenimientos (certificados compartidos) → Historial del local y descarga de un certificado. No ve accesos de alta.
 4. **PROVEEDOR:** técnico creado por ADMIN → Mis trabajos → registrar una intervención, adjuntar una evidencia y enviarla.
 
 **Resultado esperado:**
@@ -65,7 +68,7 @@ $env:FACILITYHUB_ADMIN_PASSWORD = "<contraseña de admin@facilityhub.local>"
 - un 401 devuelve al login y los errores de conexión muestran «Reintentar».
 
 ## P-04 Pruebas automatizadas del backend
-- **`mvn test`:** 147 pruebas unitarias sin base de datos. Resultado esperado: `BUILD SUCCESS`.
+- **`mvn test`:** 164 pruebas unitarias sin base de datos. Resultado esperado: `BUILD SUCCESS`.
 - **Pruebas de integración (`*IT`):** solo contra la base de pruebas dedicada y protegida por la barrera `P4Entorno` (ver `backend/README.md`).
 
 ## P-05 Evidencias para la memoria
@@ -80,3 +83,22 @@ Capturar como mínimo:
   - «Mis trabajos» del proveedor.
 
 No incluir en las capturas contraseñas, tokens ni datos personales reales.
+
+## P-06 Demostración reproducible
+Ver [`scripts/demo/README.md`](../scripts/demo/README.md). Todo se ejecuta sobre la base desechable `facilityhub_demo`, en un PostgreSQL propio; los scripts rechazan la base principal `facilityhub`.
+
+- **`demo.ps1 -Accion PrepararPresentacion`:** reconstruye `facilityhub_demo` (V1–V10) y deja la app en el login. Resultado esperado: 14/14 comprobaciones.
+- **`demo.ps1 -Accion Validar -ConCicloCompleto`:** API de los cuatro roles y ciclo de intervención. Resultado esperado: 66/66.
+- **`demo.ps1 -Accion Android`:** recorridos de la app por rol. Resultado esperado: 26/26.
+
+Validar y Android modifican datos: después hay que ejecutar `PrepararPresentacion`.
+
+**Últimos resultados comprobados** (23/11/2026, con el código de `main` hasta FH-010B):
+
+| Prueba | Resultado |
+|---|---|
+| `PrepararPresentacion` | 14/14 |
+| `Validar -ConCicloCompleto` | 66/66 |
+| `Android` | 26/26 |
+| Unitarias del backend | 164/164 |
+| Integración con barrera (`InstalacionesFH010AP6IT`) | 9/9 |

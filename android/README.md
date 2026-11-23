@@ -10,16 +10,23 @@ Cliente móvil de FacilityHub:
 | Carpeta o archivo | Contenido |
 |---|---|
 | `data/` | `FacilityApi` (Retrofit), `FacilityRepository`, modelos (`Models.kt`, `ModelsP6.kt`), `NetworkProvider` (URL base y token) y `TokenStore` |
-| `ui/` | Pantallas Compose y ViewModels: `FacilityViewModel`, `FlujoViewModel`, `AlertasViewModel`, `PanelViewModel` y `HistorialViewModel` |
+| `ui/` | Pantallas Compose y ViewModels: `FacilityViewModel`, `FlujoViewModel`, `AlertasViewModel`, `PanelViewModel` y `HistorialViewModel`. Además: `Navegacion.kt` (barra inferior por rol), `EstadoCarga.kt` (estado de cada pantalla), `CampoFecha.kt` (selector de fecha), `InstalacionScreens.kt` y `ObligacionScreens.kt` (formularios de alta) |
+| `ui/theme/` | Tema Material 3 claro y oscuro, espaciados e iconos |
 | `MainActivity.kt` | Navegación y pantalla inicial según el rol |
 
 ## Pantallas por rol
 | Rol | Pantallas |
 |---|---|
-| ADMIN y EXPLOTACION | Centros → Locales → Detalle del local (inquilino, instalaciones, obligaciones, **Historial**) → Mantenimientos y documentos. **Panel de Explotación** (indicadores y listados por filtro), Validaciones, Proveedores, Declarados y Solicitudes. Gestión del mantenimiento (asignación) e Intervención (aprobar, pedir corrección o cerrar) |
-| INQUILINO | Mis obligaciones (declarar o solicitar proveedor), Mantenimientos (fecha prevista, asignar proveedor aceptado, certificados), **Historial del local** con descarga de certificados compartidos y Mis solicitudes |
-| PROVEEDOR | Mis trabajos → detalle del trabajo → Intervención (registrar, adjuntar evidencias y enviar a validación) |
-| Todos | Mis notificaciones (alertas) |
+| ADMIN y EXPLOTACION | **Pestañas:** Panel, Centros, Validaciones (EXPLOTACION) o Proveedores (ADMIN) y Avisos. **Centros:** Centros → Locales → Detalle del local (inquilino, instalaciones, obligaciones e **Historial**) → Mantenimientos y documentos. **Panel de Explotación:** indicadores y bandejas por filtro. **Altas:** «Instalaciones» del centro, con **Nueva instalación** (en local o zona común) y **Nueva obligación** (desde el local o la zona común). **Otras pantallas:** Validaciones, Proveedores, Declarados y Solicitudes. **Gestión:** asignación del mantenimiento e intervención (aprobar, pedir corrección o cerrar) |
+| INQUILINO | **Pestañas:** Mi local, Solicitudes y Avisos. **Mi local:** obligaciones (declarar o solicitar proveedor) e historial del local, con descarga de certificados compartidos. **Mantenimientos:** fecha prevista, asignación del proveedor aceptado y certificados |
+| PROVEEDOR | **Pestañas:** Trabajos y Avisos. **Mis trabajos** por fases (Por hacer, Corrección y Enviados) → detalle del trabajo → Intervención (registrar, adjuntar evidencias y enviar a validación) |
+| Todos | Avisos (alertas) y menú de cuenta con «Cerrar sesión» |
+
+**Diseño (FH-009):**
+- Material 3 con tema claro y oscuro.
+- Selector de fecha en español.
+- Barra inferior adaptada a la fuente del sistema al 200 %.
+- Cada pantalla tiene su propio estado de carga y error, y sus datos son reutilizables durante 60 s.
 
 Los botones de acción salen solo de `accionesPermitidas`, calculadas por el backend. La app no duplica reglas de permisos.
 
@@ -37,4 +44,16 @@ Los botones de acción salen solo de `accionesPermitidas`, calculadas por el bac
 > **Dispositivo físico:** `10.0.2.2` solo funciona en el emulador. Para un móvil real hay que cambiar la URL base por la IP del equipo en la red local.
 
 ## Validación
-La app se ha validado en un emulador Pixel_6 contra bases de datos desechables, en cada fase: panel de Explotación, historial, descarga de certificados, permisos por rol y respuestas 401/403/404 y de conexión. Las evidencias (capturas e informes) están fuera del repositorio. No hay pruebas Android automatizadas.
+La app se ha validado en un emulador Pixel_6 contra bases de datos desechables en cada fase: panel de Explotación, historial, descarga de certificados, altas de instalaciones y obligaciones, permisos por rol, respuestas 401/403/404 y de conexión, tema oscuro y fuente al 200 %.
+
+**Recorridos automatizados** con ADB y UI Automator en [`scripts/demo/`](../scripts/demo/README.md) (`demo.ps1 -Accion Android`): 26 comprobaciones para los cuatro roles.
+
+**Últimos resultados:**
+
+| Prueba | Resultado |
+|---|---|
+| Regresión | 26/26 |
+| Alta de instalaciones | 18/18 |
+| Alta de obligaciones | 21/21 |
+
+No hay pruebas instrumentadas en el módulo Android. Las capturas y los informes de cada fase están fuera del repositorio.

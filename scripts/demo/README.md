@@ -8,6 +8,11 @@ Estos scripts construyen, validan y restauran una demostración completa de Faci
 
 No se crean cuentas ni datos a mano, y no usan Docker.
 
+> **Base principal protegida:** la demo solo trabaja con `facilityhub_demo`.
+> - Nunca se conecta a la base principal `facilityhub` ni al puerto 5432.
+> - La migración V10 solo se aplica a esta base de demo: el backend la pide con `FACILITYHUB_FLYWAY_TARGET=10`.
+> - La base principal sigue en V9.
+
 ## Requisitos (ya instalados en el equipo de desarrollo)
 - PostgreSQL 18 (`C:\Program Files\PostgreSQL\18\bin`).
 - JDK 21 y Maven, con las dependencias en caché: los scripts compilan en modo offline.
@@ -24,7 +29,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts\demo\demo.ps1 -Accio
 | Acción | Qué hace |
 |---|---|
 | `PrepararPresentacion` | **Para presentar.** Reconstruye la demo en su estado inicial y arranca los backends 18080 y 8080. Comprueba la conectividad y el aislamiento, el login de las 6 cuentas, los estados iniciales de las intervenciones y los contadores del panel. Después arranca el emulador, instala la app y la deja **en la pantalla de login**, con un resumen de comprobaciones sin contraseñas. **No ejecuta recorridos automáticos ni modifica el escenario** |
-| `Construir` | Crea o reutiliza el clúster demo (127.0.0.1:55440), **recrea** `facilityhub_demo`, arranca el backend en **18080** (Flyway V1–V9), verifica el aislamiento y siembra las cuentas y los datos. Cada ejecución parte de cero: no duplica datos |
+| `Construir` | Crea o reutiliza el clúster demo (127.0.0.1:55440), **recrea** `facilityhub_demo`, arranca el backend en **18080** (Flyway V1–V10: solo esta base desechable pide V10, con `FACILITYHUB_FLYWAY_TARGET=10`), verifica el aislamiento y siembra las cuentas y los datos. Cada ejecución parte de cero: no duplica datos |
 | `Validar` | Comprobaciones automáticas de la API, de solo lectura: autenticación, permisos, panel, alertas, historial y descarga de certificados con SHA-256. Con `-ConCicloCompleto` ejecuta además `scripts\validar-api.ps1`, que escribe datos |
 | `Android` | Arranca un segundo backend demo en **8080** (la app usa `10.0.2.2:8080`) y el emulador si no está en marcha, compila e instala la app y ejecuta los recorridos de ADMIN, EXPLOTACION, PROVEEDOR e INQUILINO A y B. Tarda entre 45 y 90 minutos. Con `-Roles` se limita a algunos roles (por ejemplo, `-Roles ADMIN`). **EXPLOTACION y PROVEEDOR modifican datos.** Las animaciones del emulador se desactivan durante las pruebas y se restauran siempre |
 | `Reiniciar` | Vuelve al estado inicial de la demo (equivale a `Construir`) |
@@ -75,4 +80,15 @@ Cada local tiene sus instalaciones y hay además una **zona común**. Escenarios
 - un registro «Histórico P5 — sin validación»;
 - alertas.
 
-Los datos maestros que no tienen API se cargan por SQL **solo** en la base demo; todo lo funcional pasa por los endpoints reales. El detalle está en `manifiesto-demo.json`, sin secretos.
+Algunos datos de partida (usuarios del inquilino B, zona común y registro P5) se cargan por SQL, **solo** en la base demo. El resto pasa por los endpoints reales. El detalle está en `manifiesto-demo.json`, sin secretos.
+
+## Últimos resultados comprobados
+Resultados del 23/11/2026, con el código de `main` hasta FH-010B:
+
+| Acción | Resultado |
+|---|---|
+| `PrepararPresentacion` | 14/14 |
+| `Validar -ConCicloCompleto` | 66/66 |
+| `Android` | 26/26 |
+
+`Validar -ConCicloCompleto` y `Android` cambian datos de la demo; después hay que volver a ejecutar `PrepararPresentacion`.
