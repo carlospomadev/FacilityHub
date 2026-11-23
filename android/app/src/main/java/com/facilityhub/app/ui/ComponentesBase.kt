@@ -1,6 +1,8 @@
 package com.facilityhub.app.ui
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
@@ -180,6 +182,54 @@ internal fun ScreenScaffold(
     // el contenido desplazable termina por encima de ella, asi que no tapa nada.
     barraInferior: (@Composable ColumnScope.() -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit
+) = MarcoPantalla(title, subtitle, onAction, actionLabel, accionExtra, barraInferior) { paddingValues ->
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(paddingValues)
+            .consumeWindowInsets(paddingValues)
+            .imePadding()
+            .then(if (scrollable) Modifier.verticalScroll(rememberScrollState()) else Modifier)
+            .padding(horizontal = FhEspacio.l, vertical = FhEspacio.m),
+        content = content
+    )
+}
+
+/**
+ * FH-009 / R7: misma estructura que [ScreenScaffold] con el contenido en una LazyColumn (listas largas: solo se componen
+ * los elementos visibles). Cabeceras y formularios van en `item {}`; las listas, en `items(..., key = { it.id })`.
+ */
+@Composable
+internal fun PantallaLista(
+    title: String,
+    subtitle: String,
+    onAction: () -> Unit,
+    actionLabel: String? = null,
+    accionExtra: (@Composable () -> Unit)? = null,
+    barraInferior: (@Composable ColumnScope.() -> Unit)? = null,
+    content: LazyListScope.() -> Unit
+) = MarcoPantalla(title, subtitle, onAction, actionLabel, accionExtra, barraInferior) { paddingValues ->
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(paddingValues)
+            .consumeWindowInsets(paddingValues)
+            .imePadding(),
+        contentPadding = PaddingValues(horizontal = FhEspacio.l, vertical = FhEspacio.m),
+        content = content
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun MarcoPantalla(
+    title: String,
+    subtitle: String,
+    onAction: () -> Unit,
+    actionLabel: String?,
+    accionExtra: (@Composable () -> Unit)?,
+    barraInferior: (@Composable ColumnScope.() -> Unit)?,
+    cuerpo: @Composable (PaddingValues) -> Unit
 ) {
     // FH-009 / R3: en la raiz de una pestana no hay flecha atras; se muestra el menu de cuenta (con «Cerrar sesión»).
     // Fuera de una pestana: «Volver», salvo una etiqueta explicita (p. ej. «Salir» en la pantalla sin permisos).
@@ -223,19 +273,21 @@ internal fun ScreenScaffold(
                 }
             }
         }
-    ) { paddingValues ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .consumeWindowInsets(paddingValues)
-                .imePadding()
-                .then(if (scrollable) Modifier.verticalScroll(rememberScrollState()) else Modifier)
-                .padding(horizontal = FhEspacio.l, vertical = FhEspacio.m),
-            content = content
-        )
-    }
+    ) { paddingValues -> cuerpo(paddingValues) }
 }
+
+/**
+ * FH-009 / R7: carga y error de una lectura de pantalla (cada pantalla muestra solo los suyos). Con datos ya visibles,
+ * la recarga muestra la barra de progreso sin vaciar la lista; el error ofrece «Reintentar».
+ */
+@Composable
+internal fun EstadoLectura(lectura: Lectura, onReintentar: (() -> Unit)? = null) {
+    EstadoCargando(lectura.cargando)
+    lectura.error?.let { EstadoError(it, enabled = !lectura.cargando, onReintentar = onReintentar) }
+}
+
+/** Vacio solo cuando la lectura termino bien sin resultados (no mientras carga ni tras un error). */
+internal fun Lectura.vacia(lista: Collection<*>): Boolean = cargada && !cargando && error == null && lista.isEmpty()
 
 /**
  * FH-009 / R6: pestanas internas de una pantalla (no la barra inferior). Con fuente normal ocupan todo el ancho; con

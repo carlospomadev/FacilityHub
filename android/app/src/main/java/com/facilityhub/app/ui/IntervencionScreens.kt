@@ -8,6 +8,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -52,7 +54,9 @@ internal fun etiquetaValidacion(e: String?) = when (e) {
 }
 
 @Composable
-internal fun MensajesFlujo(flujo: FlujoViewModel) {
+internal fun MensajesFlujo(flujo: FlujoViewModel, lectura: Lectura? = null, onReintentar: (() -> Unit)? = null) {
+    // FH-009 / R7: estado de la lectura de esta pantalla (si la hay) y, aparte, el de la ultima operacion.
+    lectura?.let { EstadoLectura(it, onReintentar) }
     EstadoCargando(flujo.loading)
     flujo.error?.let { EstadoError(it) }
     flujo.aviso?.let { Mensaje(it, Tono.EXITO) }
@@ -60,8 +64,8 @@ internal fun MensajesFlujo(flujo: FlujoViewModel) {
 
 // Lista de intervenciones de un mantenimiento (proveedor: solo las de su empresa; gestion: todas).
 @Composable
-internal fun ListaIntervenciones(intervenciones: List<IntervencionDto>, onIntervencion: (Long) -> Unit) {
-    if (intervenciones.isEmpty()) {
+internal fun ListaIntervenciones(intervenciones: List<IntervencionDto>, vacia: Boolean, onIntervencion: (Long) -> Unit) {
+    if (vacia) {
         EstadoVacio("Sin intervenciones registradas.", FhIcons.Herramienta)
     }
     intervenciones.forEach { i ->
@@ -91,14 +95,14 @@ fun IntervencionesTrabajoSection(
 ) {
     LaunchedEffect(trabajo.mantenimientoId) { flujo.cargarIntervencionesMantenimiento(trabajo.mantenimientoId) }
     SectionTitle("Intervenciones")
-    MensajesFlujo(flujo)
+    MensajesFlujo(flujo, flujo.lecIntervenciones) { flujo.cargarIntervencionesMantenimiento(trabajo.mantenimientoId) }
     if (trabajo.accionesPermitidas.orEmpty().contains(ACCION_REGISTRAR_INTERVENCION)) {
         Button(
             onClick = { flujo.registrarIntervencion(trabajo.mantenimientoId) { id -> onIntervencion(id) } },
             enabled = !flujo.loading
         ) { Text("Registrar intervención") }
     }
-    ListaIntervenciones(flujo.intervencionesMantenimiento, onIntervencion)
+    ListaIntervenciones(flujo.intervencionesMantenimiento, flujo.lecIntervenciones.vacia(flujo.intervencionesMantenimiento), onIntervencion)
 }
 
 @Composable
@@ -112,10 +116,11 @@ fun IntervencionScreen(
     val acciones = i?.accionesPermitidas.orEmpty()
 
     // Formulario de borrador (se rellena con los datos cargados y se reinicia al cambiar de version).
-    var fecha by remember(i?.id, i?.version) { mutableStateOf(i?.fechaEjecucion.orEmpty()) }
-    var actuaciones by remember(i?.id, i?.version) { mutableStateOf(i?.actuaciones.orEmpty()) }
-    var resultado by remember(i?.id, i?.version) { mutableStateOf(i?.resultado) }
-    var incidencias by remember(i?.id, i?.version) { mutableStateOf(i?.incidencias.orEmpty()) }
+    // FH-009 / R7: rememberSaveable (sobrevive a cambios de configuracion y al volver a la pantalla restaurada).
+    var fecha by rememberSaveable(i?.id, i?.version) { mutableStateOf(i?.fechaEjecucion.orEmpty()) }
+    var actuaciones by rememberSaveable(i?.id, i?.version) { mutableStateOf(i?.actuaciones.orEmpty()) }
+    var resultado by rememberSaveable(i?.id, i?.version) { mutableStateOf(i?.resultado) }
+    var incidencias by rememberSaveable(i?.id, i?.version) { mutableStateOf(i?.incidencias.orEmpty()) }
     var categoria by remember { mutableStateOf("EVIDENCIA") }
     var confirmarEnvio by remember { mutableStateOf(false) }
 
@@ -170,7 +175,8 @@ fun IntervencionScreen(
         } else null
     ) {
         // Con barra fija, los mensajes van en ella (no arriba, fuera de la vista de quien ha pulsado una accion).
-        if (!conBarra) MensajesFlujo(flujo)
+        val recargar = { flujo.cargarIntervencion(intervencionId) }
+        if (!conBarra) MensajesFlujo(flujo, flujo.lecIntervencion, recargar) else EstadoLectura(flujo.lecIntervencion, recargar)
         if (i == null) return@ScreenScaffold
 
         FilaChips(Modifier.padding(bottom = FhEspacio.s)) {
@@ -188,7 +194,8 @@ fun IntervencionScreen(
         if (acciones.contains(ACCION_EDITAR_INTERVENCION)) {
             DatoEtiquetado("Envío", "nº ${i.numeroEnvio}")
             Spacer(Modifier.height(8.dp))
-            OutlinedTextField(fecha, { fecha = it }, label = { Text("Fecha de ejecución o intento (AAAA-MM-DD)") }, modifier = Modifier.fillMaxWidth())
+            // FH-009 / R7: selector de fecha (la API sigue recibiendo AAAA-MM-DD).
+            CampoFecha(valor = fecha, onValor = { fecha = it }, etiqueta = "Fecha de ejecución o intento", enabled = !flujo.loading, opcional = true)
             OutlinedTextField(actuaciones, { actuaciones = it }, label = { Text("Actuaciones realizadas") }, modifier = Modifier.fillMaxWidth(), minLines = 2)
             Text("Resultado", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 6.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -431,6 +438,8 @@ fun MantenimientoGestionScreen(
     ScreenScaffold(title = "Intervenciones", subtitle = titulo, onAction = onBack, scrollable = true) {
         MensajesFlujo(flujo)
         SectionTitle("Asignación")
+        EstadoLectura(flujo.lecAsignacion) { flujo.cargarAsignacion(mantenimientoId) }
+        EstadoLectura(flujo.lecProveedores) { flujo.cargarProveedores(forzar = true) }
         val a = flujo.asignacion
         if (a != null) {
             DatoEtiquetado("Proveedor", a.proveedor)
@@ -458,7 +467,8 @@ fun MantenimientoGestionScreen(
         Text("El cumplimiento se declara aprobando una intervención presentada; no hay finalización manual.",
             style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(vertical = 6.dp))
         SectionTitle("Intervenciones")
-        ListaIntervenciones(flujo.intervencionesMantenimiento, onIntervencion)
+        EstadoLectura(flujo.lecIntervenciones) { flujo.cargarIntervencionesMantenimiento(mantenimientoId) }
+        ListaIntervenciones(flujo.intervencionesMantenimiento, flujo.lecIntervenciones.vacia(flujo.intervencionesMantenimiento), onIntervencion)
     }
 
     proveedorElegido?.takeIf { confirmarAsignacion }?.let { p ->
@@ -481,10 +491,12 @@ fun MantenimientoGestionScreen(
 @Composable
 fun BandejaValidacionScreen(flujo: FlujoViewModel, onIntervencion: (Long) -> Unit, onBack: () -> Unit) {
     LaunchedEffect(Unit) { flujo.limpiarMensajes(); flujo.cargarPendientes() }
-    ScreenScaffold(title = "Pendientes de validación", subtitle = "Explotación", onAction = onBack, scrollable = true) {
-        MensajesFlujo(flujo)
-        if (!flujo.loading && flujo.pendientes.isEmpty() && flujo.error == null) EstadoVacio("No hay intervenciones pendientes.", FhIcons.Hecho)
-        flujo.pendientes.forEach { p ->
+    PantallaLista(title = "Pendientes de validación", subtitle = "Explotación", onAction = onBack) {
+        item {
+            MensajesFlujo(flujo, flujo.lecPendientes) { flujo.cargarPendientes(forzar = true) }
+            if (flujo.lecPendientes.vacia(flujo.pendientes)) EstadoVacio("No hay intervenciones pendientes.", FhIcons.Hecho)
+        }
+        items(flujo.pendientes, key = { it.id }) { p ->
             Card(
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
                 modifier = Modifier.fillMaxWidth().padding(vertical = FhEspacio.xs).clickable { onIntervencion(p.id) }
@@ -508,9 +520,12 @@ fun BandejaValidacionScreen(flujo: FlujoViewModel, onIntervencion: (Long) -> Uni
 @Composable
 fun ProveedoresScreen(flujo: FlujoViewModel, onBack: () -> Unit) {
     LaunchedEffect(Unit) { flujo.limpiarMensajes(); flujo.cargarProveedores() }
-    ScreenScaffold(title = "Proveedores", subtitle = "Consulta", onAction = onBack, scrollable = true) {
-        MensajesFlujo(flujo)
-        flujo.proveedores.forEach { p ->
+    PantallaLista(title = "Proveedores", subtitle = "Consulta", onAction = onBack) {
+        item {
+            MensajesFlujo(flujo, flujo.lecProveedores) { flujo.cargarProveedores(forzar = true) }
+            if (flujo.lecProveedores.vacia(flujo.proveedores)) EstadoVacio("No hay proveedores registrados.", FhIcons.Proveedores)
+        }
+        items(flujo.proveedores, key = { it.id }) { p ->
             Card(
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
                 modifier = Modifier.fillMaxWidth().padding(vertical = FhEspacio.xs)

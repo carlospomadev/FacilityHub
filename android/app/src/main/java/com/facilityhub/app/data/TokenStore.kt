@@ -1,9 +1,13 @@
 package com.facilityhub.app.data
 
 import android.content.Context
+import android.content.pm.ApplicationInfo
 
 class TokenStore(context: Context) {
     private val prefs = context.getSharedPreferences("facilityhub_session", Context.MODE_PRIVATE)
+
+    // FH-009 / R7: solo en compilaciones de depuracion se registran metricas de red (ver NetworkProvider).
+    val depurable: Boolean = (context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
 
     var token: String?
         get() = prefs.getString("token", null)

@@ -13,6 +13,8 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.async
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import retrofit2.HttpException
@@ -23,7 +25,11 @@ import java.time.LocalDate
 class FacilityViewModel(application: Application) : AndroidViewModel(application) {
     private val tokenStore = TokenStore(application)
     private val repository = FacilityRepository(NetworkProvider.createApi(tokenStore), tokenStore)
+    // FH-009 / R7: corrutinas de la sesion actual (se cancelan al salir).
+    private val sesion = AmbitoSesion(this)
 
+    // FH-009 / R7: loading/error quedan para el login y las escrituras (con sus guardas contra dobles envios). Cada
+    // lectura de pantalla tiene su propio estado (Lectura): su carga y su error no aparecen en otras pantallas.
     var loading by mutableStateOf(false); private set
     var error by mutableStateOf<String?>(null); private set
     var loggedIn by mutableStateOf(tokenStore.token != null); private set
@@ -58,6 +64,17 @@ class FacilityViewModel(application: Application) : AndroidViewModel(application
     var trabajos by mutableStateOf<List<TrabajoProveedorDto>>(emptyList()); private set
     var trabajo by mutableStateOf<TrabajoProveedorDto?>(null); private set
 
+    // FH-009 / R7: estado propio de cada lectura (pantalla).
+    val lecCentros = Lectura()
+    val lecLocales = Lectura()
+    val lecLocal = Lectura()
+    val lecMantenimientos = Lectura()
+    val lecDocumentos = Lectura()
+    val lecTrabajos = Lectura()
+    val lecTrabajo = Lectura()
+    private val lecturas = listOf(lecCentros, lecLocales, lecLocal, lecMantenimientos, lecDocumentos, lecTrabajos, lecTrabajo)
+    private val caducar: () -> Unit = { if (loggedIn) sesionCaducada = true }
+
     // FH-009 / R2: true cuando el ultimo intento de login fallo por credenciales (los campos se marcan en error).
     var credencialesIncorrectas by mutableStateOf(false); private set
 
@@ -65,7 +82,7 @@ class FacilityViewModel(application: Application) : AndroidViewModel(application
         // Guarda sincrona contra envios duplicados (doble toque, tecla Entrar + boton).
         if (loading) return
         loading = true; error = null; credencialesIncorrectas = false; avisoLogin = null; sesionCaducada = false
-        viewModelScope.launch {
+        sesion.scope.launch {
             try {
                 // Limite propio solo para la autenticacion (no cambia el cliente HTTP del resto de pantallas): ante un
                 // servidor inalcanzable el aviso llega en segundos y no tras el tiempo de espera por defecto.
@@ -79,54 +96,78 @@ class FacilityViewModel(application: Application) : AndroidViewModel(application
                     credencialesIncorrectas = e is HttpException && e.code() in setOf(400, 401)
                     error = mensajeErrorLogin(e); return@launch
                 }
+                // FH-009 / R7: sin precarga aqui; la pantalla inicial de cada rol pide sus datos (antes «Mis trabajos»
+                // se pedia dos veces tras el login).
                 loggedIn = true; userName = result.nombre; role = result.rol
-                try {
-                    if (esProveedor) {
-                        trabajos = repository.trabajos()
-                    } else if (puedeGestionar || esInquilino) {
-                        centros = repository.centros()
-                    }
-                    onSuccess()
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (e: Exception) {
-                    error = mensajeError(e)
-                }
+                onSuccess()
             } finally {
                 loading = false
             }
         }
     }
 
-    fun cargarTrabajos() = viewModelScope.launch { action { trabajos = repository.trabajos() } }
+    // ---------- Lecturas (cada una con su estado; ver Lectura) ----------
 
-    fun cargarTrabajo(mantenimientoId: Long) {
-        trabajo = null
-        viewModelScope.launch { action { trabajo = repository.trabajo(mantenimientoId) } }
+    fun cargarTrabajos(forzar: Boolean = false) {
+        if (!forzar && !lecTrabajos.necesitaRecarga("trabajos")) return
+        lecTrabajos.lanzar(sesion.scope, "trabajos", { trabajos = emptyList() }, { repository.trabajos() }, { trabajos = it }, caducar)
     }
 
-    fun cargarCentros() = viewModelScope.launch { action { centros = repository.centros() } }
-    fun cargarLocales(centroId: Long) = viewModelScope.launch { action { locales = repository.locales(centroId) } }
+    fun cargarTrabajo(mantenimientoId: Long) =
+        lecTrabajo.lanzar(sesion.scope, mantenimientoId, { trabajo = null }, { repository.trabajo(mantenimientoId) }, { trabajo = it }, caducar)
 
-    fun cargarDetalleLocal(localId: Long) = viewModelScope.launch {
-        action {
-            inquilino = repository.inquilino(localId)
-            instalaciones = repository.instalaciones(localId)
-            obligaciones = repository.obligaciones(localId)
-        }
+    // Los centros cambian poco: se piden al abrir la pestana si no estan cargados o han caducado.
+    fun cargarCentros(forzar: Boolean = false) {
+        if (!forzar && !lecCentros.necesitaRecarga("centros")) return
+        lecCentros.lanzar(sesion.scope, "centros", { centros = emptyList() }, { repository.centros() }, { centros = it }, caducar)
     }
 
-    fun cargarMantenimientos(obligacionId: Long) = viewModelScope.launch {
-        action { mantenimientos = repository.mantenimientos(obligacionId) }
+    fun cargarLocales(centroId: Long, forzar: Boolean = false) {
+        if (!forzar && !lecLocales.necesitaRecarga(centroId)) return
+        lecLocales.lanzar(sesion.scope, centroId, { locales = emptyList() }, { repository.locales(centroId) }, { locales = it }, caducar)
     }
+
+    // Tres peticiones independientes en paralelo (antes en serie); se aplican juntas o ninguna.
+    fun cargarDetalleLocal(localId: Long, forzar: Boolean = false) {
+        if (!forzar && !lecLocal.necesitaRecarga(localId)) return
+        lecLocal.lanzar(
+            sesion.scope, localId,
+            limpiar = { inquilino = null; instalaciones = emptyList(); obligaciones = emptyList() },
+            peticion = {
+                coroutineScope {
+                    val inq = async { repository.inquilino(localId) }
+                    val ins = async { repository.instalaciones(localId) }
+                    val obl = async { repository.obligaciones(localId) }
+                    Triple(inq.await(), ins.await(), obl.await())
+                }
+            },
+            aplicar = { (inq, ins, obl) -> inquilino = inq; instalaciones = ins; obligaciones = obl },
+            onSesionCaducada = caducar
+        )
+    }
+
+    fun cargarMantenimientos(obligacionId: Long, forzar: Boolean = false) {
+        if (!forzar && !lecMantenimientos.necesitaRecarga(obligacionId)) return
+        lecMantenimientos.lanzar(sesion.scope, obligacionId, { mantenimientos = emptyList() },
+            { repository.mantenimientos(obligacionId) }, { mantenimientos = it }, caducar)
+    }
+
+    fun cargarDocumentos(mantenimientoId: Long, forzar: Boolean = false) {
+        if (!forzar && !lecDocumentos.necesitaRecarga(mantenimientoId)) return
+        lecDocumentos.lanzar(sesion.scope, mantenimientoId, { documentos = emptyList() },
+            { repository.documentos(mantenimientoId) }, { documentos = it }, caducar)
+    }
+
+    // ---------- Escrituras (loading/error compartidos solo entre escrituras; guarda sincrona) ----------
 
     fun crearMantenimiento(obligacionId: Long, fecha: String, descripcion: String?, onCreated: () -> Unit) {
         // Guarda sincrona: se marca ocupado antes de lanzar la corrutina para ignorar toques repetidos.
         if (loading || !puedeGestionar) return
         loading = true
-        viewModelScope.launch {
-            action {
+        sesion.scope.launch {
+            operacion {
                 repository.crearMantenimiento(obligacionId, fecha, descripcion)
+                CambiosDatos.marcar()
                 mantenimientos = repository.mantenimientos(obligacionId)
                 onCreated()
             }
@@ -139,30 +180,31 @@ class FacilityViewModel(application: Application) : AndroidViewModel(application
         val actual = mantenimientos.firstOrNull { it.id == mantenimiento.id } ?: return
         if (siguienteEstado(actual.estado) != nuevoEstado) return
         loading = true
-        viewModelScope.launch {
-            action {
+        sesion.scope.launch {
+            operacion {
                 val fechaRealizacion = if (nuevoEstado == "FINALIZADO") LocalDate.now().toString() else null
                 repository.cambiarEstadoMantenimiento(actual.id, nuevoEstado, fechaRealizacion, actual.observaciones)
-                mantenimientos = repository.mantenimientos(actual.obligacionId)
-                obligaciones = repository.obligaciones(localId)
+                CambiosDatos.marcar()
+                // Recargas independientes en paralelo (antes en serie).
+                coroutineScope {
+                    val m = async { repository.mantenimientos(actual.obligacionId) }
+                    val o = async { repository.obligaciones(localId) }
+                    mantenimientos = m.await(); obligaciones = o.await()
+                }
             }
         }
-    }
-
-    fun cargarDocumentos(mantenimientoId: Long) {
-        documentos = emptyList()
-        viewModelScope.launch { action { documentos = repository.documentos(mantenimientoId) } }
     }
 
     fun subirDocumento(mantenimientoId: Long, uri: Uri) {
         // Guarda sincrona: el POST no es idempotente y no se reintenta automaticamente.
         if (loading || !puedeGestionar) return
         loading = true
-        viewModelScope.launch {
-            action {
+        sesion.scope.launch {
+            operacion {
                 val documento = withContext(Dispatchers.IO) { prepararDocumento(uri) }
                 try {
                     repository.subirDocumento(mantenimientoId, documento.nombre, documento.mime, documento.archivo)
+                    CambiosDatos.marcar()
                     documentos = repository.documentos(mantenimientoId)
                 } finally {
                     withContext(Dispatchers.IO) { documento.archivo.delete() }
@@ -175,7 +217,10 @@ class FacilityViewModel(application: Application) : AndroidViewModel(application
 
     /** Cierra la sesion local (token y datos). Con [caducada], el login muestra el motivo. No llama a la API. */
     fun logout(caducada: Boolean = false) {
-        sesionCaducada = false
+        // FH-009 / R7: se cancelan las peticiones en curso de la sesion; ninguna respuesta tardia llega a la siguiente.
+        sesion.reiniciar()
+        lecturas.forEach { it.reiniciar() }
+        sesionCaducada = false; loading = false
         avisoLogin = if (caducada) "Tu sesión ha caducado. Vuelve a iniciar sesión." else null
         tokenStore.clear(); loggedIn = false; userName = ""; role = ""
         centros = emptyList(); locales = emptyList(); obligaciones = emptyList(); mantenimientos = emptyList()
@@ -186,9 +231,11 @@ class FacilityViewModel(application: Application) : AndroidViewModel(application
 
     fun clearError() { error = null; credencialesIncorrectas = false }
 
-    private suspend fun action(block: suspend () -> Unit) {
+    private suspend fun operacion(block: suspend () -> Unit) {
         loading = true; error = null
-        try { block() } catch (e: Exception) {
+        try { block() } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
             error = mensajeError(e)
             if (e is HttpException && e.code() == 401 && loggedIn) sesionCaducada = true
         }

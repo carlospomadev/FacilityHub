@@ -1,6 +1,7 @@
 package com.facilityhub.app.ui
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -70,17 +71,20 @@ fun MisNotificacionesScreen(
     LaunchedEffect(Unit) { alertas.clearError(); alertas.cargar() }
     LaunchedEffect(alertas.sesionCaducada) { if (alertas.sesionCaducada) onSesionCaducada() }
 
-    ScreenScaffold(title = "Mis notificaciones", subtitle = "${alertas.noLeidas} sin leer", onAction = onBack, scrollable = true) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Checkbox(checked = alertas.soloNoLeidas, onCheckedChange = { alertas.cambiarFiltro(it) }, enabled = !alertas.loading)
-            Text("Solo no leídas")
+    // FH-009 / R7: lista perezosa con clave estable (id de la alerta).
+    PantallaLista(title = "Mis notificaciones", subtitle = "${alertas.noLeidas} sin leer", onAction = onBack) {
+        item {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Checkbox(checked = alertas.soloNoLeidas, onCheckedChange = { alertas.cambiarFiltro(it) }, enabled = !alertas.loading)
+                Text("Solo no leídas")
+            }
+            EstadoCargando(alertas.loading)
+            alertas.error?.let { e -> EstadoError(e, enabled = !alertas.loading) { alertas.cargar() } }
+            if (alertas.cargada && !alertas.loading && alertas.error == null && alertas.alertas.isEmpty()) {
+                EstadoVacio(if (alertas.soloNoLeidas) "No tienes avisos sin leer." else "No tienes avisos.", FhIcons.Avisos)
+            }
         }
-        EstadoCargando(alertas.loading)
-        alertas.error?.let { e -> EstadoError(e, enabled = !alertas.loading) { alertas.cargar() } }
-        if (alertas.cargada && !alertas.loading && alertas.error == null && alertas.alertas.isEmpty()) {
-            EstadoVacio(if (alertas.soloNoLeidas) "No tienes avisos sin leer." else "No tienes avisos.", FhIcons.Avisos)
-        }
-        alertas.alertas.forEach { a ->
+        items(alertas.alertas, key = { it.id }) { a ->
             val leida = a.leidaAt != null
             val destino = destinoAlerta(a, rol)
             Card(
