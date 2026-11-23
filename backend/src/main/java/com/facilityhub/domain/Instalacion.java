@@ -17,6 +17,19 @@ public class Instalacion {
     @Column(name = "created_at", nullable = false) private LocalDateTime createdAt;
 
     protected Instalacion() {}
+
+    // FH-010A / RF-07: alta desde la API. La coherencia centro/local la comprueba el servicio y la garantiza la BD
+    // (fk_instalacion_local_centro).
+    public Instalacion(Centro centro, LocalComercial local, String nombre, String tipo, String descripcion,
+                       EstadoInstalacion estado, LocalDateTime createdAt) {
+        this.centro = centro;
+        this.local = local;
+        this.nombre = nombre;
+        this.tipo = tipo;
+        this.descripcion = descripcion;
+        this.estado = estado;
+        this.createdAt = createdAt;
+    }
     public Long getId() { return id; }
     public Centro getCentro() { return centro; }
     public LocalComercial getLocal() { return local; }

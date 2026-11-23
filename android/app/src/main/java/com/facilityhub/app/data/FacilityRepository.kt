@@ -18,6 +18,8 @@ class FacilityRepository(private val api: FacilityApi, private val tokenStore: T
     suspend fun locales(centroId: Long) = api.locales(centroId)
     suspend fun inquilino(localId: Long) = api.inquilinoActual(localId)
     suspend fun instalaciones(localId: Long) = api.instalaciones(localId)
+    suspend fun instalacionesCentro(centroId: Long) = api.instalacionesCentro(centroId)
+    suspend fun crearInstalacion(centroId: Long, peticion: CrearInstalacionRequest) = api.crearInstalacion(centroId, peticion)
     suspend fun obligaciones(localId: Long) = api.obligaciones(localId)
     suspend fun mantenimientos(obligacionId: Long) = api.mantenimientos(obligacionId)
     suspend fun crearMantenimiento(obligacionId: Long, fecha: String, descripcion: String?) =

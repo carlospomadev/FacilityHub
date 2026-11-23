@@ -398,9 +398,11 @@ private fun NavGraphBuilder.rutasCentro(nav: NavHostController, vm: FacilityView
             onLocal = { local ->
 
                 nav.navigate(
-                    "local/${local.id}/${enc(local.nombre ?: local.codigo)}"
+                    "local/${local.id}/${enc(local.nombre ?: local.codigo)}/$centroId/${enc(nombre)}"
                 )
             },
+
+            onInstalaciones = { nav.navigate("instalaciones-centro/$centroId/${enc(nombre)}") },
 
             onBack = {
                 nav.popBackStack()
@@ -408,9 +410,42 @@ private fun NavGraphBuilder.rutasCentro(nav: NavHostController, vm: FacilityView
         )
     }
 
+    // FH-010A / RF-07: instalaciones del centro y alta (zona comun o local). localId = -1 -> zona comun.
+    composable(
+        route = "instalaciones-centro/{centroId}/{nombre}",
+        arguments = listOf(navArgument("centroId") { type = NavType.LongType }, navArgument("nombre") { type = NavType.StringType })
+    ) { entry ->
+        val centroId = entry.arguments!!.getLong("centroId")
+        val nombre = dec(entry.arguments!!.getString("nombre")!!)
+        InstalacionesCentroScreen(
+            vm = vm, centroId = centroId, centroNombre = nombre,
+            onNueva = { nav.navigate("instalacion-nueva/$centroId/${enc(nombre)}/-1") },
+            onBack = { nav.popBackStack() }
+        )
+    }
 
     composable(
-        route = "local/{localId}/{nombre}",
+        route = "instalacion-nueva/{centroId}/{nombre}/{localId}",
+        arguments = listOf(
+            navArgument("centroId") { type = NavType.LongType },
+            navArgument("nombre") { type = NavType.StringType },
+            navArgument("localId") { type = NavType.LongType }
+        )
+    ) { entry ->
+        val centroId = entry.arguments!!.getLong("centroId")
+        val nombre = dec(entry.arguments!!.getString("nombre")!!)
+        val localId = entry.arguments!!.getLong("localId").takeIf { it > 0 }
+        InstalacionFormScreen(
+            vm = vm, centroId = centroId, centroNombre = nombre, localInicial = localId,
+            // Cancelar no llama a la API: solo vuelve a la pantalla anterior.
+            onCancelar = { nav.popBackStack() },
+            onCreada = { nav.popBackStack() }
+        )
+    }
+
+
+    composable(
+        route = "local/{localId}/{nombre}/{centroId}/{centroNombre}",
 
         arguments = listOf(
 
@@ -420,7 +455,11 @@ private fun NavGraphBuilder.rutasCentro(nav: NavHostController, vm: FacilityView
 
             navArgument("nombre") {
                 type = NavType.StringType
-            }
+            },
+
+            navArgument("centroId") { type = NavType.LongType },
+
+            navArgument("centroNombre") { type = NavType.StringType }
         )
     ) { entry ->
 
@@ -433,10 +472,15 @@ private fun NavGraphBuilder.rutasCentro(nav: NavHostController, vm: FacilityView
                     .getString("nombre")!!
             )
 
+        val centroId = entry.arguments!!.getLong("centroId")
+        val centroNombre = dec(entry.arguments!!.getString("centroNombre")!!)
+
         LocalDetalleScreen(
             vm = vm,
             localId = localId,
             localNombre = nombre,
+
+            onNuevaInstalacion = { nav.navigate("instalacion-nueva/$centroId/${enc(centroNombre)}/$localId") },
 
             onObligacion = { obligacion ->
 
