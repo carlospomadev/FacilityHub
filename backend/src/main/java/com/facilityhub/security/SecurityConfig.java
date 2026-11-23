@@ -135,6 +135,9 @@ public class SecurityConfig {
                     .hasAnyRole("ADMIN", "EXPLOTACION", "INQUILINO")
                 .requestMatchers(HttpMethod.POST, "/api/obligaciones/**")
                     .hasAnyRole("ADMIN", "EXPLOTACION")
+                // FH-010A / RF-07: alta de instalaciones solo gestion (el servicio vuelve a comprobarlo).
+                .requestMatchers(HttpMethod.POST, "/api/centros/*/instalaciones")
+                    .hasAnyRole("ADMIN", "EXPLOTACION")
                 .requestMatchers(HttpMethod.PATCH, "/api/obligaciones/*/responsable")
                     .hasAnyRole("ADMIN", "EXPLOTACION")
                 .requestMatchers(HttpMethod.GET, "/api/mantenimientos/**", "/api/documentos/*/archivo")

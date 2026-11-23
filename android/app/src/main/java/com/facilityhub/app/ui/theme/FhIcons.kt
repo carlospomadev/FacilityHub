@@ -42,6 +42,7 @@ object FhIcons {
     // FH-009 / R5: documentos de imagen (evidencias fotograficas).
     val Imagen = icono("imagen", "M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5z")
     // FH-009 / R4: abrir detalle (tarjetas y accesos del panel).
+    val Anadir = icono("anadir", "M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z")
     val Anterior = icono("anterior", "M15.41 7.41 14 6l-6 6 6 6 1.41-1.41L10.83 12z")
     val Siguiente = icono("siguiente", "M10 6 8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z")
     // FH-009 / R2: mostrar u ocultar la contrasena.

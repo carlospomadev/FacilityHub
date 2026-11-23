@@ -263,6 +263,7 @@ fun LocalesScreen(
     centroId: Long,
     centroNombre: String,
     onLocal: (LocalDto) -> Unit,
+    onInstalaciones: () -> Unit = {},
     onBack: () -> Unit
 ) {
     LaunchedEffect(centroId) {
@@ -275,6 +276,16 @@ fun LocalesScreen(
         onAction = onBack
     ) {
         EstadoLectura(vm.lecLocales) { vm.cargarLocales(centroId, forzar = true) }
+
+        // FH-010A / RF-07: instalaciones del centro (zona comun y locales) y su alta, solo gestion.
+        if (vm.puedeGestionar) {
+            OutlinedButton(onClick = onInstalaciones, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+                Icon(FhIcons.Herramienta, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(FhEspacio.s))
+                Text("Instalaciones del centro")
+            }
+            Spacer(Modifier.height(FhEspacio.m))
+        }
 
         LazyColumn(
             verticalArrangement = Arrangement.spacedBy(FhEspacio.s)
@@ -296,6 +307,8 @@ fun LocalDetalleScreen(
     localNombre: String,
     onObligacion: (ObligacionDto) -> Unit,
     onHistorial: () -> Unit = {},
+    // FH-010A / RF-07: alta de instalacion en este local (null = sin acceso, p. ej. sin centro conocido o sin permiso).
+    onNuevaInstalacion: (() -> Unit)? = null,
     onBack: () -> Unit
 ) {
     LaunchedEffect(localId) {
@@ -307,7 +320,10 @@ fun LocalDetalleScreen(
         subtitle = "Detalle del local",
         onAction = onBack
     ) {
-        item { EstadoLectura(vm.lecLocal) { vm.cargarDetalleLocal(localId, forzar = true) } }
+        item {
+            AvisoInstalacion(vm)
+            EstadoLectura(vm.lecLocal) { vm.cargarDetalleLocal(localId, forzar = true) }
+        }
 
         vm.inquilino?.let { inquilino ->
             item {
@@ -322,7 +338,17 @@ fun LocalDetalleScreen(
             }
         }
 
-        item { SectionTitle("Instalaciones") }
+        item {
+            SectionTitle("Instalaciones")
+            if (vm.puedeGestionar && onNuevaInstalacion != null) {
+                OutlinedButton(onClick = onNuevaInstalacion, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+                    Icon(FhIcons.Anadir, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(FhEspacio.s))
+                    Text("Registrar instalación")
+                }
+            }
+            if (vm.lecLocal.vacia(vm.instalaciones)) EstadoVacio("Sin instalaciones registradas.")
+        }
 
         items(vm.instalaciones, key = { "ins-${it.id}" }) { instalacion ->
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 2.dp)) {

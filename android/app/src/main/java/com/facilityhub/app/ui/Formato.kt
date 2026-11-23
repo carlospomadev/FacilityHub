@@ -64,6 +64,8 @@ internal fun etiquetaVisibilidad(v: String?): String = if (v == "COMPARTIDO") "C
 internal fun etiquetaEstadoInstalacion(e: String?): String = when (e) {
     "ACTIVA" -> "Activa"
     "INACTIVA" -> "Inactiva"
+    // FH-010A: valor de ck_instalacion_estado (antes se mostraba «Fuera_servicio»).
+    "FUERA_SERVICIO" -> "Fuera de servicio"
     "BAJA" -> "De baja"
     null -> ""
     else -> e.lowercase(ES).replaceFirstChar { it.titlecase(ES) }

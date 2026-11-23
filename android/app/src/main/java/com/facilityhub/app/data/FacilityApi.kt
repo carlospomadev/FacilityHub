@@ -29,6 +29,13 @@ interface FacilityApi {
     @GET("api/locales/{id}/instalaciones")
     suspend fun instalaciones(@Path("id") localId: Long): List<InstalacionDto>
 
+    // FH-010A / RF-07: instalaciones del centro (zona comun y locales) y alta; solo gestion.
+    @GET("api/centros/{id}/instalaciones")
+    suspend fun instalacionesCentro(@Path("id") centroId: Long): List<InstalacionCentroDto>
+
+    @POST("api/centros/{id}/instalaciones")
+    suspend fun crearInstalacion(@Path("id") centroId: Long, @Body body: CrearInstalacionRequest): InstalacionCentroDto
+
     @GET("api/locales/{id}/obligaciones")
     suspend fun obligaciones(@Path("id") localId: Long): List<ObligacionDto>
 

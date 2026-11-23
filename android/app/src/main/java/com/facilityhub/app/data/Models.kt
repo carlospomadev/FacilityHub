@@ -7,6 +7,12 @@ data class CentroDto(val id: Long, val codigo: String, val nombre: String, val c
 data class LocalDto(val id: Long, val codigo: String, val nombre: String?, val planta: String?, val ubicacion: String?, val activo: Boolean)
 data class InquilinoDto(val id: Long, val cif: String?, val razonSocial: String, val nombreComercial: String?, val emailContacto: String?, val telefono: String?)
 data class InstalacionDto(val id: Long, val nombre: String, val tipo: String, val descripcion: String?, val estado: String)
+// FH-010A / RF-07: instalacion con su ubicacion en el centro (localId nulo = zona comun) y peticion de alta.
+data class InstalacionCentroDto(
+    val id: Long, val nombre: String, val tipo: String, val descripcion: String?, val estado: String,
+    val centroId: Long, val localId: Long?, val localCodigo: String?, val localNombre: String?
+)
+data class CrearInstalacionRequest(val localId: Long?, val nombre: String, val tipo: String, val descripcion: String?, val estado: String)
 data class ObligacionDto(val id: Long, val localId: Long, val instalacion: String?, val tipoMantenimiento: String, val periodicidadMeses: Int, val proximaFecha: String, val estado: String)
 data class MantenimientoDto(val id: Long, val obligacionId: Long, val fechaProgramada: String, val fechaRealizacion: String?, val estado: String, val descripcion: String?, val observaciones: String?)
 data class CrearMantenimientoRequest(val fechaProgramada: String, val descripcion: String?)

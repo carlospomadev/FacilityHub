@@ -72,7 +72,16 @@ class FacilityViewModel(application: Application) : AndroidViewModel(application
     val lecDocumentos = Lectura()
     val lecTrabajos = Lectura()
     val lecTrabajo = Lectura()
-    private val lecturas = listOf(lecCentros, lecLocales, lecLocal, lecMantenimientos, lecDocumentos, lecTrabajos, lecTrabajo)
+    // FH-010A / RF-07: instalaciones del centro (gestion).
+    var instalacionesCentro by mutableStateOf<List<InstalacionCentroDto>>(emptyList()); private set
+    val lecInstalacionesCentro = Lectura()
+    // Alta de instalacion: estado propio (no comparte loading/error con otras escrituras ni con las lecturas).
+    var guardandoInstalacion by mutableStateOf(false); private set
+    var errorInstalacion by mutableStateOf<ErrorAltaInstalacion?>(null); private set
+    // Confirmacion visible en la lista de destino tras un alta correcta; la pantalla la consume al mostrarla.
+    var avisoInstalacion by mutableStateOf<String?>(null); private set
+    private val lecturas = listOf(lecCentros, lecLocales, lecLocal, lecMantenimientos, lecDocumentos, lecTrabajos, lecTrabajo,
+        lecInstalacionesCentro)
     private val caducar: () -> Unit = { if (loggedIn) sesionCaducada = true }
 
     // FH-009 / R2: true cuando el ultimo intento de login fallo por credenciales (los campos se marcan en error).
@@ -158,6 +167,45 @@ class FacilityViewModel(application: Application) : AndroidViewModel(application
             { repository.documentos(mantenimientoId) }, { documentos = it }, caducar)
     }
 
+    fun cargarInstalacionesCentro(centroId: Long, forzar: Boolean = false) {
+        if (!puedeGestionar) return
+        if (!forzar && !lecInstalacionesCentro.necesitaRecarga(centroId)) return
+        lecInstalacionesCentro.lanzar(sesion.scope, centroId, { instalacionesCentro = emptyList() },
+            { repository.instalacionesCentro(centroId) }, { instalacionesCentro = it }, caducar)
+    }
+
+    // ---------- FH-010A / RF-07: alta de instalacion ----------
+
+    /**
+     * Registra una instalacion. Guarda sincrona contra dobles envios (el POST no es idempotente). Si falla, el formulario
+     * conserva sus datos: el error se expone en [errorInstalacion] (409 = duplicado, ligado al campo Nombre). Tras un alta
+     * correcta se invalidan las lecturas ([CambiosDatos]) para que la lista de destino se recargue al volver.
+     */
+    fun registrarInstalacion(centroId: Long, peticion: CrearInstalacionRequest, onCreada: (InstalacionCentroDto) -> Unit) {
+        if (guardandoInstalacion || !puedeGestionar) return
+        guardandoInstalacion = true; errorInstalacion = null
+        sesion.scope.launch {
+            try {
+                val creada = repository.crearInstalacion(centroId, peticion)
+                CambiosDatos.marcar()
+                val ubicacion = if (creada.localId == null) "la zona común"
+                    else "el local ${creada.localNombre ?: creada.localCodigo}"
+                avisoInstalacion = "Instalación «${creada.nombre}» registrada en $ubicacion."
+                onCreada(creada)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                errorInstalacion = errorAltaInstalacion(e)
+                if (e is HttpException && e.code() == 401 && loggedIn) sesionCaducada = true
+            } finally {
+                guardandoInstalacion = false
+            }
+        }
+    }
+
+    fun limpiarErrorInstalacion() { errorInstalacion = null }
+    fun consumirAvisoInstalacion() { avisoInstalacion = null }
+
     // ---------- Escrituras (loading/error compartidos solo entre escrituras; guarda sincrona) ----------
 
     fun crearMantenimiento(obligacionId: Long, fecha: String, descripcion: String?, onCreated: () -> Unit) {
@@ -227,6 +275,7 @@ class FacilityViewModel(application: Application) : AndroidViewModel(application
         documentos = emptyList(); trabajos = emptyList(); trabajo = null
         // FH-006 / P6-D3-6: sin restos de la sesion anterior en el login (p. ej. un error de conexion previo a un 401).
         inquilino = null; instalaciones = emptyList(); error = null; credencialesIncorrectas = false
+        instalacionesCentro = emptyList(); guardandoInstalacion = false; errorInstalacion = null; avisoInstalacion = null
     }
 
     fun clearError() { error = null; credencialesIncorrectas = false }
@@ -323,6 +372,25 @@ internal fun mensajeError(e: Exception): String = when (e) {
     }
     is IOException -> "No se pudo conectar con el servidor. Inténtalo de nuevo."
     else -> e.message ?: "Error de comunicacion"
+}
+
+/** FH-010A: error del alta de instalacion. [duplicado] = el nombre ya existe en esa ubicacion (se marca el campo Nombre). */
+data class ErrorAltaInstalacion(val mensaje: String, val duplicado: Boolean = false)
+
+// FH-010A: traduce los rechazos conocidos del alta (el cuerpo de error solo se puede leer una vez).
+internal fun errorAltaInstalacion(e: Exception): ErrorAltaInstalacion {
+    if (e !is HttpException || e.code() !in setOf(400, 404, 409)) return ErrorAltaInstalacion(mensajeError(e))
+    val detalle = detalleError(e).orEmpty()
+    return when {
+        e.code() == 409 && detalle.startsWith("Ya existe una instalacion") ->
+            ErrorAltaInstalacion("Ya existe una instalación con ese nombre en esta ubicación.", duplicado = true)
+        detalle.startsWith("El centro esta inactivo") -> ErrorAltaInstalacion("El centro está inactivo y no admite nuevas instalaciones.")
+        detalle.startsWith("El local esta inactivo") -> ErrorAltaInstalacion("El local está inactivo y no admite nuevas instalaciones.")
+        detalle.startsWith("El local no pertenece") -> ErrorAltaInstalacion("El local elegido no pertenece a este centro.")
+        e.code() == 404 -> ErrorAltaInstalacion("El centro o el local ya no existe. Vuelve atrás y recarga los datos.")
+        e.code() == 400 -> ErrorAltaInstalacion("Datos no válidos. Revisa los campos marcados.")
+        else -> ErrorAltaInstalacion("No se pudo registrar: la operación entra en conflicto con los datos actuales. Recarga los datos.")
+    }
 }
 
 // Extrae "detail" de la respuesta ProblemDetail sin dependencias adicionales.
