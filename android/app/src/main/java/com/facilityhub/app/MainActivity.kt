@@ -420,7 +420,28 @@ private fun NavGraphBuilder.rutasCentro(nav: NavHostController, vm: FacilityView
         InstalacionesCentroScreen(
             vm = vm, centroId = centroId, centroNombre = nombre,
             onNueva = { nav.navigate("instalacion-nueva/$centroId/${enc(nombre)}/-1") },
+            onNuevaObligacion = { nav.navigate("obligacion-nueva/$centroId/${enc(nombre)}/-1") },
             onBack = { nav.popBackStack() }
+        )
+    }
+
+    // FH-010B / RF-09: alta de obligacion. localId = -1 -> zona comun.
+    composable(
+        route = "obligacion-nueva/{centroId}/{nombre}/{localId}",
+        arguments = listOf(
+            navArgument("centroId") { type = NavType.LongType },
+            navArgument("nombre") { type = NavType.StringType },
+            navArgument("localId") { type = NavType.LongType }
+        )
+    ) { entry ->
+        val centroId = entry.arguments!!.getLong("centroId")
+        val nombre = dec(entry.arguments!!.getString("nombre")!!)
+        val localId = entry.arguments!!.getLong("localId").takeIf { it > 0 }
+        ObligacionFormScreen(
+            vm = vm, centroId = centroId, centroNombre = nombre, localInicial = localId,
+            // Cancelar no llama a la API: solo vuelve a la pantalla anterior.
+            onCancelar = { nav.popBackStack() },
+            onCreada = { nav.popBackStack() }
         )
     }
 
@@ -481,6 +502,7 @@ private fun NavGraphBuilder.rutasCentro(nav: NavHostController, vm: FacilityView
             localNombre = nombre,
 
             onNuevaInstalacion = { nav.navigate("instalacion-nueva/$centroId/${enc(centroNombre)}/$localId") },
+            onNuevaObligacion = { nav.navigate("obligacion-nueva/$centroId/${enc(centroNombre)}/$localId") },
 
             onObligacion = { obligacion ->
 

@@ -309,6 +309,8 @@ fun LocalDetalleScreen(
     onHistorial: () -> Unit = {},
     // FH-010A / RF-07: alta de instalacion en este local (null = sin acceso, p. ej. sin centro conocido o sin permiso).
     onNuevaInstalacion: (() -> Unit)? = null,
+    // FH-010B / RF-09: alta de obligacion en este local (null = sin acceso).
+    onNuevaObligacion: (() -> Unit)? = null,
     onBack: () -> Unit
 ) {
     LaunchedEffect(localId) {
@@ -322,6 +324,7 @@ fun LocalDetalleScreen(
     ) {
         item {
             AvisoInstalacion(vm)
+            AvisoObligacion(vm)
             EstadoLectura(vm.lecLocal) { vm.cargarDetalleLocal(localId, forzar = true) }
         }
 
@@ -372,6 +375,14 @@ fun LocalDetalleScreen(
             }
 
             SectionTitle("Obligaciones de mantenimiento")
+            if (vm.puedeGestionar && onNuevaObligacion != null) {
+                OutlinedButton(onClick = onNuevaObligacion, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+                    Icon(FhIcons.Anadir, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(FhEspacio.s))
+                    Text("Registrar obligación")
+                }
+            }
+            if (vm.lecLocal.vacia(vm.obligaciones)) EstadoVacio("Sin obligaciones registradas.")
         }
 
         items(vm.obligaciones, key = { "obl-${it.id}" }) { obligacion ->

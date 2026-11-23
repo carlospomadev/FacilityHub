@@ -36,6 +36,16 @@ interface FacilityApi {
     @POST("api/centros/{id}/instalaciones")
     suspend fun crearInstalacion(@Path("id") centroId: Long, @Body body: CrearInstalacionRequest): InstalacionCentroDto
 
+    // FH-010B / RF-09: catalogo de tipos activos, obligaciones del centro y alta; solo gestion.
+    @GET("api/tipos-mantenimiento")
+    suspend fun tiposMantenimiento(): List<TipoMantenimientoDto>
+
+    @GET("api/centros/{id}/obligaciones")
+    suspend fun obligacionesCentro(@Path("id") centroId: Long): List<ObligacionCentroDto>
+
+    @POST("api/centros/{id}/obligaciones")
+    suspend fun crearObligacion(@Path("id") centroId: Long, @Body body: CrearObligacionRequest): ObligacionCentroDto
+
     @GET("api/locales/{id}/obligaciones")
     suspend fun obligaciones(@Path("id") localId: Long): List<ObligacionDto>
 

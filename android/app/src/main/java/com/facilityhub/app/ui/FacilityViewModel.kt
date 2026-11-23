@@ -80,8 +80,16 @@ class FacilityViewModel(application: Application) : AndroidViewModel(application
     var errorInstalacion by mutableStateOf<ErrorAltaInstalacion?>(null); private set
     // Confirmacion visible en la lista de destino tras un alta correcta; la pantalla la consume al mostrarla.
     var avisoInstalacion by mutableStateOf<String?>(null); private set
+    // FH-010B / RF-09: catalogo de tipos activos (del backend; no se duplica en la app) y obligaciones del centro.
+    var tiposMantenimiento by mutableStateOf<List<TipoMantenimientoDto>>(emptyList()); private set
+    val lecTipos = Lectura()
+    var obligacionesCentro by mutableStateOf<List<ObligacionCentroDto>>(emptyList()); private set
+    val lecObligacionesCentro = Lectura()
+    var guardandoObligacion by mutableStateOf(false); private set
+    var errorObligacion by mutableStateOf<ErrorAltaObligacion?>(null); private set
+    var avisoObligacion by mutableStateOf<String?>(null); private set
     private val lecturas = listOf(lecCentros, lecLocales, lecLocal, lecMantenimientos, lecDocumentos, lecTrabajos, lecTrabajo,
-        lecInstalacionesCentro)
+        lecInstalacionesCentro, lecTipos, lecObligacionesCentro)
     private val caducar: () -> Unit = { if (loggedIn) sesionCaducada = true }
 
     // FH-009 / R2: true cuando el ultimo intento de login fallo por credenciales (los campos se marcan en error).
@@ -203,6 +211,49 @@ class FacilityViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
+    // ---------- FH-010B / RF-09: obligaciones ----------
+
+    fun cargarTipos(forzar: Boolean = false) {
+        if (!puedeGestionar) return
+        if (!forzar && !lecTipos.necesitaRecarga("tipos")) return
+        lecTipos.lanzar(sesion.scope, "tipos", { tiposMantenimiento = emptyList() }, { repository.tiposMantenimiento() },
+            { tiposMantenimiento = it }, caducar)
+    }
+
+    fun cargarObligacionesCentro(centroId: Long, forzar: Boolean = false) {
+        if (!puedeGestionar) return
+        if (!forzar && !lecObligacionesCentro.necesitaRecarga(centroId)) return
+        lecObligacionesCentro.lanzar(sesion.scope, centroId, { obligacionesCentro = emptyList() },
+            { repository.obligacionesCentro(centroId) }, { obligacionesCentro = it }, caducar)
+    }
+
+    /**
+     * Registra una obligacion (D2: solo la obligacion; el primer mantenimiento se programa despues con el flujo de RF-10).
+     * Misma guarda contra dobles envios y el mismo tratamiento de errores que el alta de instalaciones.
+     */
+    fun registrarObligacion(centroId: Long, peticion: CrearObligacionRequest, onCreada: (ObligacionCentroDto) -> Unit) {
+        if (guardandoObligacion || !puedeGestionar) return
+        guardandoObligacion = true; errorObligacion = null
+        sesion.scope.launch {
+            try {
+                val creada = repository.crearObligacion(centroId, peticion)
+                CambiosDatos.marcar()
+                avisoObligacion = "Obligación registrada correctamente. El primer mantenimiento está pendiente de programar."
+                onCreada(creada)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                errorObligacion = errorAltaObligacion(e)
+                if (e is HttpException && e.code() == 401 && loggedIn) sesionCaducada = true
+            } finally {
+                guardandoObligacion = false
+            }
+        }
+    }
+
+    fun limpiarErrorObligacion() { errorObligacion = null }
+    fun consumirAvisoObligacion() { avisoObligacion = null }
+
     fun limpiarErrorInstalacion() { errorInstalacion = null }
     fun consumirAvisoInstalacion() { avisoInstalacion = null }
 
@@ -276,6 +327,8 @@ class FacilityViewModel(application: Application) : AndroidViewModel(application
         // FH-006 / P6-D3-6: sin restos de la sesion anterior en el login (p. ej. un error de conexion previo a un 401).
         inquilino = null; instalaciones = emptyList(); error = null; credencialesIncorrectas = false
         instalacionesCentro = emptyList(); guardandoInstalacion = false; errorInstalacion = null; avisoInstalacion = null
+        tiposMantenimiento = emptyList(); obligacionesCentro = emptyList(); guardandoObligacion = false
+        errorObligacion = null; avisoObligacion = null
     }
 
     fun clearError() { error = null; credencialesIncorrectas = false }
@@ -390,6 +443,35 @@ internal fun errorAltaInstalacion(e: Exception): ErrorAltaInstalacion {
         e.code() == 404 -> ErrorAltaInstalacion("El centro o el local ya no existe. Vuelve atrás y recarga los datos.")
         e.code() == 400 -> ErrorAltaInstalacion("Datos no válidos. Revisa los campos marcados.")
         else -> ErrorAltaInstalacion("No se pudo registrar: la operación entra en conflicto con los datos actuales. Recarga los datos.")
+    }
+}
+
+/** FH-010B: campo del formulario al que se liga un rechazo del alta de obligacion (null = mensaje general). */
+enum class CampoObligacion { TIPO, RESPONSABLE, FECHAS }
+data class ErrorAltaObligacion(val mensaje: String, val campo: CampoObligacion? = null)
+
+// FH-010B: traduce los rechazos conocidos del alta de obligacion (el cuerpo de error solo se lee una vez).
+internal fun errorAltaObligacion(e: Exception): ErrorAltaObligacion {
+    if (e !is HttpException || e.code() !in setOf(400, 404, 409)) return ErrorAltaObligacion(mensajeError(e))
+    val d = detalleError(e).orEmpty()
+    return when {
+        d.startsWith("Ya existe una obligacion activa") ->
+            ErrorAltaObligacion("Ya existe una obligación activa de este tipo en esta ubicación.", CampoObligacion.TIPO)
+        d.startsWith("El local no tiene una ocupacion vigente") -> ErrorAltaObligacion(
+            "El local no tiene una ocupación vigente: el responsable no puede ser el inquilino.", CampoObligacion.RESPONSABLE)
+        d.contains("zona comun no puede ser responsabilidad") ->
+            ErrorAltaObligacion("En zona común el responsable solo puede ser NHOOD.", CampoObligacion.RESPONSABLE)
+        d.startsWith("La proxima fecha") ->
+            ErrorAltaObligacion("La próxima fecha no puede ser anterior a la fecha de inicio.", CampoObligacion.FECHAS)
+        d.startsWith("El tipo de mantenimiento esta inactivo") ->
+            ErrorAltaObligacion("Ese tipo de mantenimiento ya no está activo. Recarga los tipos.", CampoObligacion.TIPO)
+        d.startsWith("El centro esta inactivo") -> ErrorAltaObligacion("El centro está inactivo y no admite nuevas obligaciones.")
+        d.startsWith("El local esta inactivo") -> ErrorAltaObligacion("El local está inactivo y no admite nuevas obligaciones.")
+        d.startsWith("La instalacion") || d.startsWith("El local no pertenece") ->
+            ErrorAltaObligacion("La instalación elegida no corresponde a esta ubicación.")
+        e.code() == 404 -> ErrorAltaObligacion("El centro, el local, la instalación o el tipo ya no existe. Recarga los datos.")
+        e.code() == 400 -> ErrorAltaObligacion("Datos no válidos. Revisa los campos marcados.")
+        else -> ErrorAltaObligacion("No se pudo registrar: la operación entra en conflicto con los datos actuales. Recarga los datos.")
     }
 }
 

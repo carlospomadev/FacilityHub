@@ -247,6 +247,9 @@ function Start-BackendDemo([int]$puerto) {
     $env:SERVER_ADDRESS = "127.0.0.1"   # solo loopback (el emulador llega por 10.0.2.2 -> 127.0.0.1 del anfitrion)
     $env:FACILITYHUB_STORAGE_ROOT = $script:Demo.Storage
     $env:FACILITYHUB_RECORDATORIOS_ENABLED = "false"
+    # FH-010B: la base demo es desechable y Assert-BaseDemo ya ha verificado su nombre; solo aqui se pide V10 de forma
+    # explicita (por defecto el backend se queda en V9 para no migrar por accidente la base principal).
+    $env:FACILITYHUB_FLYWAY_TARGET = "10"
     $log = Join-Path $script:Demo.Logs "$nombre.log"
     Write-Paso "Arrancando backend demo en el puerto $puerto"
     $p = Start-Process -FilePath "java" -ArgumentList @("-cp", "`"$cp`"", "com.facilityhub.FacilityHubApplication") `

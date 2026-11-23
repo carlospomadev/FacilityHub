@@ -11,7 +11,7 @@
 #   Validar     Comprobaciones de la API (solo lectura). -ConCicloCompleto anade scripts\validar-api.ps1 (escribe).
 #   Android     Recorridos por rol con ADB/UI Automator (45-90 min). -Roles limita los roles a probar.
 # Mantenimiento del escenario:
-#   Construir   Cluster demo + base facilityhub_demo recreada + Flyway V1-V9 + backend 18080 + cuentas y datos.
+#   Construir   Cluster demo + base facilityhub_demo recreada + Flyway V1-V10 + backend 18080 + cuentas y datos.
 #   Reiniciar   Vuelve al estado inicial (equivale a 'Construir'; los backends previos de la demo se detienen).
 #   Estado      Recursos activos de la demo.
 #   Detener     Detiene SOLO lo creado por la demo (backends, emulador si lo arranco la demo, cluster) y restaura las
@@ -46,7 +46,8 @@ function Invoke-Construir {
     Initialize-Backend
     Start-BackendDemo $script:Demo.PuertoApi
     $migraciones = Invoke-Psql "SELECT string_agg(version, ',' ORDER BY installed_rank) || ' / ok=' || bool_and(success) FROM facilityhub.flyway_schema_history;"
-    if ($migraciones -notmatch '^1,2,3,4,5,6,7,8,9 / ok=t') { Stop-Demo "Migraciones inesperadas: $migraciones" }
+    # FH-010B: la base demo (desechable) recibe V10 de forma explicita (FACILITYHUB_FLYWAY_TARGET en Start-BackendDemo).
+    if ($migraciones -notmatch '^1,2,3,4,5,6,7,8,9,10 / ok=t') { Stop-Demo "Migraciones inesperadas: $migraciones" }
     Write-Ok "Flyway: versiones $migraciones"
     $cred = Get-CredencialesDemo -Regenerar:$RegenerarCredenciales
     Invoke-SemillaDemo $cred
