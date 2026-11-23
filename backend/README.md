@@ -39,6 +39,13 @@ Migraciones (`src/main/resources/db/migration`):
 | V7 | Inquilino, declaración y solicitudes de proveedor |
 | V8 | Alertas |
 | V9 | Recordatorios de vencimiento |
+| V10 | Índice único parcial: una sola obligación **activa** de zona común por centro, instalación y tipo (FH-010B). Es aditiva y se detiene, sin borrar nada, si ya existen duplicados |
+
+> **V10 no se aplica por defecto.** `application.yml` fija `spring.flyway.target` en `${FACILITYHUB_FLYWAY_TARGET:9}`:
+> - Sin esa variable, Flyway se queda en **V9** en cualquier base, incluida la base principal `facilityhub`, que permanece en V9.
+> - El backend funciona igual en V9: la regla de duplicados también la aplica el servicio.
+> - Solo un entorno autorizado debe fijar `FACILITYHUB_FLYWAY_TARGET=10`. Hoy lo hace únicamente la demo desechable (`scripts/demo`).
+> - Antes de aplicarla en una base con datos, hay que comprobar que no existan obligaciones activas de zona común duplicadas.
 
 Hibernate trabaja con `ddl-auto: validate`: no modifica el esquema. Los mantenimientos anteriores a la fase P6 quedan marcados como `validacion_requerida = FALSE` («Histórico P5 — sin validación»).
 
@@ -99,6 +106,9 @@ Todos requieren `Authorization: Bearer <token>`, salvo el login y `/actuator/hea
 |---|---|---|
 | Autenticación | `POST /api/auth/login` | público |
 | Centros y locales | `GET /api/centros`, `/api/centros/{id}`, `/api/centros/{id}/locales`; `GET /api/locales/{id}/inquilino-actual`, `/api/locales/{id}/instalaciones` | gestión e INQUILINO (su local) |
+| Instalaciones (RF-07) | `GET` y `POST /api/centros/{id}/instalaciones`: alta en un local o en la zona común (`localId` nulo); 201 con la instalación creada | gestión |
+| Alta de obligaciones (RF-09) | `GET` y `POST /api/centros/{id}/obligaciones`: alta con `localId?`, `instalacionId?`, `tipoMantenimientoId`, `responsable`, `fechaInicio` y `proximaFecha?`; 201 con la obligación creada. No crea mantenimientos | gestión |
+| Tipos de mantenimiento | `GET /api/tipos-mantenimiento`: tipos activos con su periodicidad (solo lectura) | gestión |
 | Obligaciones | `GET /api/locales/{id}/obligaciones`; `GET` y `POST /api/obligaciones/{id}/mantenimientos`; `PATCH /api/obligaciones/{id}/responsable` | consulta: gestión e INQUILINO; escritura: gestión |
 | Mantenimientos | `PATCH /api/mantenimientos/{id}/estado` (sin FINALIZADO); `GET`, `PUT` y `DELETE /api/mantenimientos/{id}/asignacion` | gestión |
 | Intervenciones | `GET` y `POST /api/mantenimientos/{id}/intervenciones`; `GET` y `PATCH /api/intervenciones/{id}`; `POST …/{id}/documentos`, `POST …/{id}/envio`; `GET …/{id}/documentos/{docId}/archivo` | gestión y PROVEEDOR asignado |
@@ -117,11 +127,12 @@ Todos requieren `Authorization: Bearer <token>`, salvo el login y `/actuator/hea
 - 401: sin token o token no válido;
 - 403: rol sin permiso;
 - 404 uniforme: recurso inexistente o ajeno;
-- 409: conflicto de versión o de estado.
+- 409: conflicto de versión o de estado, recurso inactivo, duplicado o, en obligaciones INQUILINO, local sin ocupación vigente.
 
 ## Pruebas
-- **Unitarias:** `mvn test` ejecuta 147 pruebas (Mockito) sin base de datos.
+- **Unitarias:** `mvn test` ejecuta 164 pruebas (Mockito) sin base de datos.
 - **Integración (`*IT`):** MockMvc, JWT y JPQL reales con *rollback* por prueba.
   - Una barrera (`P4Entorno`) solo permite ejecutarlas contra la base de pruebas dedicada `facilityhub_fh005_p3`, con `-Dp4.autorizado=facilityhub_fh005_p3` y la variable `P4_DB_PASSWORD`.
   - No se lanzan con `mvn test` por defecto.
+  - Las integradas no aplican migraciones: Flyway está desactivado en esa base, que no recibe V10.
 - **API de extremo a extremo:** `scripts/validar-api.ps1`, solo contra un backend desechable en `127.0.0.1:18080` (ver `docs/PLAN_PRUEBAS.md`).
