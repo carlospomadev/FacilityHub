@@ -18,6 +18,10 @@ spring:
     create-schemas: true
     schemas: facilityhub
     default-schema: facilityhub
+    # FH-010B: barrera contra la aplicacion accidental de migraciones nuevas (V10+) en la base principal. Por defecto
+    # Flyway solo llega a V9; un entorno autorizado (p. ej. la demo desechable) debe pedir V10 de forma explicita con
+    # FACILITYHUB_FLYWAY_TARGET=10 (o latest). La entidad no depende de V10: el backend funciona igual en V9.
+    target: ${FACILITYHUB_FLYWAY_TARGET:9}
   servlet:
     multipart:
       max-file-size: ${FACILITYHUB_MAX_FILE_SIZE:20MB}

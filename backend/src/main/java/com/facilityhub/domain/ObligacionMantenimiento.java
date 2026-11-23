@@ -22,6 +22,22 @@ public class ObligacionMantenimiento {
     @Column(name = "created_at", nullable = false) private LocalDateTime createdAt;
 
     protected ObligacionMantenimiento() {}
+
+    // FH-010B / RF-09: alta desde la API (estado ACTIVA, activo = true). Las reglas las valida el servicio; la BD las
+    // garantiza (FK compuestas, ck_obligacion_responsable_local, ck_proxima_fecha, trigger de coherencia e indices unicos).
+    public ObligacionMantenimiento(Centro centro, LocalComercial local, Instalacion instalacion, TipoMantenimiento tipo,
+                                   ResponsableObligacion responsable, LocalDate fechaInicio, LocalDate proximaFecha,
+                                   String observaciones, LocalDateTime createdAt) {
+        this.centro = centro;
+        this.local = local;
+        this.instalacion = instalacion;
+        this.tipoMantenimiento = tipo;
+        this.responsable = responsable;
+        this.fechaInicio = fechaInicio;
+        this.proximaFecha = proximaFecha;
+        this.observaciones = observaciones;
+        this.createdAt = createdAt;
+    }
     public Long getId() { return id; }
     public Centro getCentro() { return centro; }
     public LocalComercial getLocal() { return local; }

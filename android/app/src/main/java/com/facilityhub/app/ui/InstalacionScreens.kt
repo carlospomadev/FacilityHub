@@ -44,14 +44,21 @@ fun InstalacionesCentroScreen(
     centroId: Long,
     centroNombre: String,
     onNueva: () -> Unit,
+    // FH-010B / RF-09: alta de obligacion de zona comun (null = sin acceso).
+    onNuevaObligacion: (() -> Unit)? = null,
     onBack: () -> Unit
 ) {
-    LaunchedEffect(centroId) { vm.cargarInstalacionesCentro(centroId) }
+    LaunchedEffect(centroId) {
+        vm.cargarInstalacionesCentro(centroId)
+        vm.cargarObligacionesCentro(centroId)
+    }
     val grupos = vm.instalacionesCentro.groupBy { it.localId }
+    val obligacionesZc = vm.obligacionesCentro.filter { it.localId == null }
 
     PantallaLista(title = "Instalaciones", subtitle = centroNombre, onAction = onBack) {
         item {
             AvisoInstalacion(vm)
+            AvisoObligacion(vm)
             EstadoLectura(vm.lecInstalacionesCentro) { vm.cargarInstalacionesCentro(centroId, forzar = true) }
             Button(onClick = onNueva, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
                 Icon(FhIcons.Anadir, contentDescription = null, modifier = Modifier.size(18.dp))
@@ -65,6 +72,21 @@ fun InstalacionesCentroScreen(
             item(key = "grupo-${localId ?: "zc"}") { SectionTitle(ubicacionInstalacion(lista.first())) }
             items(lista, key = { it.id }) { instalacion -> FilaInstalacion(instalacion) }
         }
+        // FH-010B / RF-09: obligaciones de zona comun (las de cada local estan en su detalle).
+        item(key = "obligaciones-zc") {
+            Spacer(Modifier.height(FhEspacio.l))
+            SectionTitle("Obligaciones de zona común")
+            EstadoLectura(vm.lecObligacionesCentro) { vm.cargarObligacionesCentro(centroId, forzar = true) }
+            if (onNuevaObligacion != null && vm.puedeGestionar) {
+                OutlinedButton(onClick = onNuevaObligacion, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+                    Icon(FhIcons.Anadir, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(FhEspacio.s))
+                    Text("Registrar obligación de zona común")
+                }
+            }
+            if (vm.lecObligacionesCentro.vacia(obligacionesZc)) EstadoVacio("Sin obligaciones de zona común.")
+        }
+        items(obligacionesZc, key = { "obl-${it.id}" }) { o -> FilaObligacionCentro(o) }
     }
 }
 
@@ -219,7 +241,7 @@ fun InstalacionFormScreen(
 }
 
 @Composable
-private fun CampoTexto(
+internal fun CampoTexto(
     valor: String,
     onValor: (String) -> Unit,
     etiqueta: String,
