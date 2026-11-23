@@ -175,3 +175,82 @@ La integración móvil principal de FacilityHub queda funcional y validada para 
 - **Arranque reproducible validado** por la vía nativa, desde cero en una base desechable: Flyway V1–V9, backend, health check, login y conexión Android ↔ API.
 - **Docker Compose:** solo revisión estática. **`mvn spring-boot:run`:** no validado en el equipo de desarrollo.
 
+
+## 22/11/2026 – Demostración reproducible (FH-008B)
+Para poder presentar la aplicación sin preparar nada a mano, he creado los scripts de `scripts/demo/`.
+- **Qué preparan:**
+  - un PostgreSQL propio para la demo (puerto 55440, base `facilityhub_demo`);
+  - dos backends (18080 y 8080) y los datos de ejemplo.
+- **Protección de la base principal:** los scripts comprueban que el backend nunca se conecta a la base principal ni al puerto 5432.
+- **Preparar la presentación:** `demo.ps1 -Accion PrepararPresentacion` deja todo en el estado inicial, con la app abierta en el login.
+- **Comprobaciones automáticas:**
+  - 65 en la API (66 con el ciclo completo de intervención);
+  - 26 en Android, con UI Automator.
+- Publicado en el PR #7.
+
+## 22/11 – 23/11/2026 – Mejoras de diseño y navegación en Android (FH-009, R1–R7)
+He rediseñado la app en siete partes pequeñas para que fuera más clara y cómoda de usar:
+- **R1:** tema claro y oscuro con un color principal propio (`#0F5C6E`), componentes comunes y soporte para fuente grande.
+- **R2:** pantalla de login más clara: sin cuenta precargada, botón «Mostrar contraseña», teclas de acción y mensajes distintos para credenciales, conexión y servidor.
+- **R3:** barra de navegación inferior según el rol, menú de cuenta y vuelta al login cuando la sesión caduca.
+- **R4:** panel de Explotación con indicadores, bandejas y deslizar para actualizar.
+- **R5:** validación de intervenciones con los botones siempre visibles abajo y confirmación antes de aprobar o rechazar.
+- **R6:** «Mis trabajos» del proveedor separado por fases, «Mi local» del inquilino e historial en forma de línea de tiempo.
+- **R7:**
+  - cada pantalla gestiona su propia carga y sus errores, y se evitan recargas innecesarias;
+  - he añadido un selector de fecha en español y he adaptado la barra inferior a la fuente al 200 %.
+- **Pruebas:** en cada parte hice pruebas dirigidas en el emulador y repetí la regresión Android (26/26) y la preparación de la demo (14/14).
+- Publicado en los PR #8 a #14. El último merge es `400bcc4`.
+
+## 23/11/2026 – Registro de instalaciones (FH-010A, RF-07)
+Hasta ahora las instalaciones solo se podían consultar. He añadido su alta desde Android.
+- **Backend:**
+  - `POST /api/centros/{id}/instalaciones` registra una instalación en un local o en la zona común del centro;
+  - `GET /api/centros/{id}/instalaciones` lista las del centro;
+  - solo pueden usarlos ADMIN y EXPLOTACION.
+- **Validaciones:**
+  - el local tiene que ser del centro;
+  - el centro y el local deben estar activos;
+  - no se admiten dos instalaciones con el mismo nombre en el mismo sitio, aunque se envíen a la vez.
+- **Android:** pantalla «Instalaciones» del centro y formulario «Nueva instalación», con errores junto a cada campo, protección contra el doble toque y mensaje de confirmación.
+- **Pruebas:**
+
+  | Batería | Resultado |
+  |---|---|
+  | Unitarias | 154 |
+  | API | 27/27 |
+  | Android | 18/18 |
+  | Integración con barrera | 9/9 |
+  | Regresión Android | 26/26 |
+  | Preparación de la demo | 14/14 |
+
+- Publicado en el PR #15. El merge es `714dcb4`.
+
+## 23/11/2026 – Registro de obligaciones de mantenimiento (FH-010B, RF-09)
+He añadido el alta de obligaciones de mantenimiento desde Android.
+- **Backend:**
+  - `POST /api/centros/{id}/obligaciones` registra una obligación;
+  - `GET /api/centros/{id}/obligaciones` lista las del centro;
+  - `GET /api/tipos-mantenimiento` devuelve el catálogo de tipos (solo lectura).
+- **Reglas que he aplicado:**
+  - el inquilino solo puede ser responsable si el local tiene una ocupación vigente, y nunca en zona común;
+  - al registrar la obligación **no** se crea ningún mantenimiento: el primero se programa después;
+  - si no se indica la próxima fecha, se calcula con la periodicidad del tipo;
+  - no se admiten dos obligaciones activas iguales.
+- **Migración V10:** añade un índice para evitar obligaciones duplicadas en la zona común.
+  - Para no aplicarla por error en la base principal, el backend se queda en **V9** salvo que se indique `FACILITYHUB_FLYWAY_TARGET=10`.
+  - Solo la he aplicado en bases de prueba y en la demo. **La base principal sigue en V9.**
+- **Android:** formulario «Nueva obligación» con el tipo del catálogo, la periodicidad visible, el responsable, las fechas y una explicación de cómo se calcula la próxima fecha.
+- **Pruebas:**
+
+  | Batería | Resultado |
+  |---|---|
+  | Unitarias | 164 |
+  | V10 en bases de prueba | 12/12 |
+  | API | 43/43 |
+  | Android | 21/21 |
+  | API con ciclo completo | 66/66 |
+  | Regresión Android | 26/26 |
+  | Preparación de la demo | 14/14 |
+
+- Publicado en el PR #16. El merge es `1b0c3ab`.
