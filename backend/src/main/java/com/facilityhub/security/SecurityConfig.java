@@ -141,8 +141,13 @@ public class SecurityConfig {
                 // FH-010B / RF-09: alta de obligaciones y catalogo de tipos (solo lectura), solo gestion.
                 .requestMatchers(HttpMethod.POST, "/api/centros/*/obligaciones")
                     .hasAnyRole("ADMIN", "EXPLOTACION")
-                .requestMatchers(HttpMethod.GET, "/api/tipos-mantenimiento")
+                .requestMatchers(HttpMethod.GET, "/api/tipos-mantenimiento", "/api/tipos-mantenimiento/**")
                     .hasAnyRole("ADMIN", "EXPLOTACION")
+                // FH-012 / RF-08 (D1): alta, edicion y activacion del catalogo solo ADMIN (el servicio vuelve a comprobarlo).
+                .requestMatchers(HttpMethod.POST, "/api/tipos-mantenimiento")
+                    .hasRole("ADMIN")
+                .requestMatchers(HttpMethod.PATCH, "/api/tipos-mantenimiento/*", "/api/tipos-mantenimiento/*/activo")
+                    .hasRole("ADMIN")
                 .requestMatchers(HttpMethod.PATCH, "/api/obligaciones/*/responsable")
                     .hasAnyRole("ADMIN", "EXPLOTACION")
                 .requestMatchers(HttpMethod.GET, "/api/mantenimientos/**", "/api/documentos/*/archivo")

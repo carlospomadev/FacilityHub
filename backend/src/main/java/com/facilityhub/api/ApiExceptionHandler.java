@@ -1,5 +1,6 @@
 package com.facilityhub.api;
 
+import com.facilityhub.service.ConflictoCodificadoException;
 import com.facilityhub.service.ConflictoException;
 import com.facilityhub.service.RecursoNoDisponibleException;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -31,6 +32,16 @@ public class ApiExceptionHandler {
 
     // FH-006: conflictos de estado, de unicidad (p. ej. dos asignaciones activas) o de version concurrente.
     // El detalle de integridad no se expone: puede contener nombres internos de restricciones o valores.
+    // FH-012: conflicto con codigo estable y datos no sensibles (p. ej. obligaciones afectadas).
+    @ExceptionHandler(ConflictoCodificadoException.class)
+    public ProblemDetail conflictoCodificado(ConflictoCodificadoException ex) {
+        ProblemDetail detail = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
+        detail.setTitle("Conflicto");
+        detail.setProperty("codigo", ex.getCodigo());
+        ex.getDatos().forEach(detail::setProperty);
+        return detail;
+    }
+
     @ExceptionHandler(ConflictoException.class)
     public ProblemDetail conflicto(ConflictoException ex) {
         ProblemDetail detail = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());

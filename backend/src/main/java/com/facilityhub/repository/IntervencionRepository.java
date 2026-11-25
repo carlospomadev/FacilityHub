@@ -20,6 +20,19 @@ public interface IntervencionRepository extends JpaRepository<Intervencion, Long
     @Query("select i from Intervencion i where i.id = :id")
     Optional<Intervencion> bloquear(@Param("id") Long id);
 
+    // FH-012 / RF-08 (D2): intervenciones abiertas de un tipo que quedarian bloqueadas al exigir documento. Abiertas =
+    // aun por enviar (BORRADOR o REQUIERE_CORRECCION); el envio exige evidencia solo si el resultado es ejecutado, asi
+    // que cuentan las de resultado nulo (aun sin decidir) o distinto de NO_REALIZADO, y sin ningun documento adjunto.
+    @Query("""
+        select count(i) from Intervencion i
+        where i.mantenimiento.obligacion.tipoMantenimiento.id = :tipoId
+          and i.estadoValidacion in (com.facilityhub.domain.EstadoValidacion.BORRADOR,
+                                     com.facilityhub.domain.EstadoValidacion.REQUIERE_CORRECCION)
+          and (i.resultado is null or i.resultado <> com.facilityhub.domain.ResultadoIntervencion.NO_REALIZADO)
+          and not exists (select d.id from DocumentoMantenimiento d where d.intervencion = i)
+        """)
+    long contarAbiertasSinDocumento(@Param("tipoId") Long tipoId);
+
     List<Intervencion> findByMantenimientoIdOrderByIdDesc(Long mantenimientoId);
 
     Optional<Intervencion> findFirstByMantenimientoIdAndEstadoValidacionIn(Long mantenimientoId, Collection<EstadoValidacion> estados);
