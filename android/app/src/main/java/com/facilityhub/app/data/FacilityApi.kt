@@ -40,6 +40,22 @@ interface FacilityApi {
     @GET("api/tipos-mantenimiento")
     suspend fun tiposMantenimiento(): List<TipoMantenimientoDto>
 
+    // FH-012 / RF-08: gestion del catalogo de tipos (consulta: gestion; escritura: ADMIN).
+    @GET("api/tipos-mantenimiento/catalogo")
+    suspend fun catalogoTipos(): List<TipoGestionDto>
+
+    @GET("api/tipos-mantenimiento/{id}")
+    suspend fun tipo(@Path("id") id: Long): TipoGestionDto
+
+    @POST("api/tipos-mantenimiento")
+    suspend fun crearTipo(@Body body: CrearTipoRequest): TipoGestionDto
+
+    @PATCH("api/tipos-mantenimiento/{id}")
+    suspend fun editarTipo(@Path("id") id: Long, @Body body: EditarTipoRequest): TipoGestionDto
+
+    @PATCH("api/tipos-mantenimiento/{id}/activo")
+    suspend fun cambiarActivoTipo(@Path("id") id: Long, @Body body: CambiarActivoTipoRequest): TipoGestionDto
+
     @GET("api/centros/{id}/obligaciones")
     suspend fun obligacionesCentro(@Path("id") centroId: Long): List<ObligacionCentroDto>
 
