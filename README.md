@@ -23,7 +23,7 @@ App Android (Compose, MVVM) --REST + JWT--> Backend Spring Boot --JPA/Flyway--> 
 
 | Rol | Uso principal |
 |---|---|
-| `ADMIN` | Administración: alta de proveedores y técnicos, solicitudes de proveedor, ejecución manual de recordatorios y todo lo de gestión |
+| `ADMIN` | Administración: alta de proveedores y técnicos, catálogo de tipos de mantenimiento, solicitudes de proveedor, ejecución manual de recordatorios y todo lo de gestión |
 | `EXPLOTACION` | Gestión: panel de trabajos, asignación de proveedores, registro y **validación** de intervenciones, documentos e historial |
 | `INQUILINO` | Sus obligaciones (según su ocupación vigente): proveedor declarado, fecha prevista, solicitudes, historial y certificados compartidos |
 | `PROVEEDOR` | Técnico de una empresa mantenedora: «Mis trabajos» asignados, registro de intervenciones, evidencias y envío a validación |
@@ -40,7 +40,7 @@ Los permisos se comprueban siempre en el backend. El rol se vuelve a leer de la 
   - validación del centro y del local, y control de duplicados.
 - **Registro de obligaciones de mantenimiento (RF-09, FH-010B):**
   - alta desde la app en un local, en una instalación o en la zona común;
-  - tipo del catálogo con su periodicidad, que se consulta en `GET /api/tipos-mantenimiento` (el catálogo, RF-08, es de solo lectura);
+  - tipo del catálogo con su periodicidad, que se consulta en `GET /api/tipos-mantenimiento`;
   - responsable contractual (NHOOD o INQUILINO; INQUILINO exige una ocupación vigente);
   - fecha de inicio y próxima fecha, que se calcula si no se indica;
   - el alta no programa ningún mantenimiento: el primero se crea después (RF-10).
@@ -62,6 +62,13 @@ Los permisos se comprueban siempre en el backend. El rol se vuelve a leer de la 
   - solicitudes de alta de proveedor nuevo.
 - **Alertas internas** («Mis notificaciones») y **recordatorios de vencimiento**. Los recordatorios están desactivados por defecto y solo se ejecutan manualmente desde ADMIN.
 - **Panel de Explotación:** vencidos, próximos, pendientes de validación, en corrección, sin asignar, declaraciones y solicitudes.
+- **Gestión de los tipos de mantenimiento (RF-08, FH-012):**
+  - ADMIN puede dar de alta, editar, desactivar y reactivar tipos desde Android; EXPLOTACION solo los consulta;
+  - el código no se puede cambiar y no se admiten códigos ni nombres repetidos;
+  - si un tipo ya se usa en obligaciones activas, cambiar la periodicidad, la regla de cálculo o el documento obligatorio pide confirmación y se aplica a partir de ahora, sin tocar las fechas guardadas;
+  - desactivar un tipo solo impide usarlo en obligaciones nuevas;
+  - si otro administrador ha cambiado el tipo mientras lo editas, la app avisa y no se sobrescribe nada;
+  - cada cambio queda registrado en la auditoría.
 - **Mejoras de diseño en la app Android (FH-009):**
   - Material 3 con tema claro y oscuro, y navegación inferior por rol;
   - panel de Explotación y selector de fecha en español;
@@ -102,20 +109,21 @@ Toda la información sensible va en variables de entorno, nunca en el repositori
 **Usuarios de demostración** (creados por la migración V3): `admin@facilityhub.local`, `explotacion@facilityhub.local` e `inquilino@facilityhub.local`. Las contraseñas no se publican en el repositorio: las facilita el responsable del proyecto. Los usuarios PROVEEDOR los da de alta un ADMIN desde la API.
 
 ## Pruebas y validación
-- `mvn test` en `backend/`: **164 pruebas unitarias** (sin base de datos).
+- `mvn test` en `backend/`: **172 pruebas unitarias** (sin base de datos).
 - **Pruebas de integración (`*IT`):** se ejecutan contra una base de pruebas dedicada con una barrera de seguridad. Ver [`backend/README.md`](backend/README.md#pruebas).
 - **`scripts/validar-api.ps1`:** recorrido completo de la API con el circuito vigente (mantenimiento → intervención → envío → validación).
 - **Demostración reproducible** ([`scripts/demo/`](scripts/demo/README.md)): base desechable propia con comprobaciones automáticas.
 
-Últimos resultados (FH-010B, 23/11/2026; todas las pruebas que escriben datos se ejecutan en bases desechables):
+Últimos resultados (FH-012, 23/11/2026; todas las pruebas que escriben datos se ejecutan en bases desechables):
 
 | Batería | Resultado |
 |---|---|
-| Unitarias del backend | 164/164 |
+| Unitarias del backend | 172/172 |
 | Integración con barrera (`InstalacionesFH010AP6IT`) | 9/9 |
 | API de la demo con ciclo completo | 66/66 |
 | Alta de instalaciones: API / Android | 27/27 / 18/18 |
 | Alta de obligaciones: API / Android | 43/43 / 21/21 |
+| Gestión de tipos: API / Android | 26/26 / 22/22 |
 | Migración V10 en bases desechables | 12/12 |
 | Regresión Android (los cuatro roles) | 26/26 |
 | Preparación de la demo | 14/14 |
@@ -134,7 +142,7 @@ Requisitos funcionales del informe de avance v0.7 y su estado en `main`:
 | RF-05 | Inquilinos | Consulta del inquilino actual; sin alta |
 | RF-06 | Ocupación e histórico | Completo |
 | RF-07 | Instalaciones | **Completo:** alta desde la app (FH-010A); sin edición |
-| RF-08 | Tipos de mantenimiento | Catálogo de solo lectura; sin alta |
+| RF-08 | Tipos de mantenimiento | **Completo:** alta, edición, desactivación y reactivación desde la app (FH-012) |
 | RF-09 | Obligaciones | **Completo:** alta desde la app, responsable y próxima fecha (FH-010B) |
 | RF-10 | Ejecuciones | Completo y ampliado (intervenciones con validación) |
 | RF-11 | Documentación | Completo |
@@ -142,7 +150,6 @@ Requisitos funcionales del informe de avance v0.7 y su estado en `main`:
 
 **Pendiente:**
 - dar de alta y editar centros, locales e inquilinos (RF-03 a RF-05);
-- dar de alta tipos de mantenimiento (RF-08);
 - editar instalaciones y obligaciones ya registradas;
 - validar el arranque con Docker Compose y con `mvn spring-boot:run` (ver la tabla de vías de arranque).
 

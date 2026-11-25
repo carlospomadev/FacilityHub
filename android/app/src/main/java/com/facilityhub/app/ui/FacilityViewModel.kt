@@ -88,8 +88,16 @@ class FacilityViewModel(application: Application) : AndroidViewModel(application
     var guardandoObligacion by mutableStateOf(false); private set
     var errorObligacion by mutableStateOf<ErrorAltaObligacion?>(null); private set
     var avisoObligacion by mutableStateOf<String?>(null); private set
+    // FH-012 / RF-08: gestion del catalogo de tipos (consulta: gestion; escritura: solo ADMIN).
+    var catalogoTipos by mutableStateOf<List<TipoGestionDto>>(emptyList()); private set
+    val lecCatalogoTipos = Lectura()
+    var tipoEditado by mutableStateOf<TipoGestionDto?>(null); private set
+    val lecTipoEditado = Lectura()
+    var guardandoTipo by mutableStateOf(false); private set
+    var errorTipo by mutableStateOf<ErrorGestionTipo?>(null); private set
+    var avisoTipo by mutableStateOf<String?>(null); private set
     private val lecturas = listOf(lecCentros, lecLocales, lecLocal, lecMantenimientos, lecDocumentos, lecTrabajos, lecTrabajo,
-        lecInstalacionesCentro, lecTipos, lecObligacionesCentro)
+        lecInstalacionesCentro, lecTipos, lecObligacionesCentro, lecCatalogoTipos, lecTipoEditado)
     private val caducar: () -> Unit = { if (loggedIn) sesionCaducada = true }
 
     // FH-009 / R2: true cuando el ultimo intento de login fallo por credenciales (los campos se marcan en error).
@@ -252,6 +260,60 @@ class FacilityViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun limpiarErrorObligacion() { errorObligacion = null }
+
+    // ---------- FH-012 / RF-08: catalogo de tipos ----------
+
+    fun cargarCatalogoTipos(forzar: Boolean = false) {
+        if (!puedeGestionar) return
+        if (!forzar && !lecCatalogoTipos.necesitaRecarga("catalogo")) return
+        lecCatalogoTipos.lanzar(sesion.scope, "catalogo", { catalogoTipos = emptyList() }, { repository.catalogoTipos() },
+            { catalogoTipos = it }, caducar)
+    }
+
+    /** Siempre pide el tipo al backend: la huella debe ser la actual al abrir (o actualizar) el formulario. */
+    fun cargarTipoEditado(id: Long) {
+        if (!esAdmin) return
+        lecTipoEditado.lanzar(sesion.scope, id, { tipoEditado = null }, { repository.tipo(id) }, { tipoEditado = it }, caducar)
+    }
+
+    fun crearTipo(peticion: CrearTipoRequest, onHecho: (TipoGestionDto) -> Unit) =
+        escrituraTipo({ repository.crearTipo(peticion) }, { "Tipo «${it.nombre}» registrado." }, onHecho)
+
+    fun editarTipo(id: Long, peticion: EditarTipoRequest, onHecho: (TipoGestionDto) -> Unit) =
+        escrituraTipo({ repository.editarTipo(id, peticion) }, { "Tipo «${it.nombre}» actualizado." }, onHecho)
+
+    fun cambiarActivoTipo(id: Long, peticion: CambiarActivoTipoRequest, onHecho: (TipoGestionDto) -> Unit) =
+        escrituraTipo({ repository.cambiarActivoTipo(id, peticion) },
+            { if (it.activo) "Tipo «${it.nombre}» reactivado."
+              else "Tipo «${it.nombre}» desactivado. Ya no se ofrece para obligaciones nuevas." },
+            onHecho)
+
+    // Guarda sincrona contra dobles envios; el formulario conserva sus datos si falla. Tras guardar, CambiosDatos invalida
+    // el catalogo y la lista de tipos activos de «Nueva obligación».
+    private fun escrituraTipo(peticion: suspend () -> TipoGestionDto, aviso: (TipoGestionDto) -> String,
+                              onHecho: (TipoGestionDto) -> Unit) {
+        if (guardandoTipo || !esAdmin) return
+        guardandoTipo = true; errorTipo = null
+        sesion.scope.launch {
+            try {
+                val tipo = peticion()
+                CambiosDatos.marcar()
+                tipoEditado = tipo
+                avisoTipo = aviso(tipo)
+                onHecho(tipo)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                errorTipo = errorGestionTipo(e)
+                if (e is HttpException && e.code() == 401 && loggedIn) sesionCaducada = true
+            } finally {
+                guardandoTipo = false
+            }
+        }
+    }
+
+    fun limpiarErrorTipo() { errorTipo = null }
+    fun consumirAvisoTipo() { avisoTipo = null }
     fun consumirAvisoObligacion() { avisoObligacion = null }
 
     fun limpiarErrorInstalacion() { errorInstalacion = null }
@@ -329,6 +391,7 @@ class FacilityViewModel(application: Application) : AndroidViewModel(application
         instalacionesCentro = emptyList(); guardandoInstalacion = false; errorInstalacion = null; avisoInstalacion = null
         tiposMantenimiento = emptyList(); obligacionesCentro = emptyList(); guardandoObligacion = false
         errorObligacion = null; avisoObligacion = null
+        catalogoTipos = emptyList(); tipoEditado = null; guardandoTipo = false; errorTipo = null; avisoTipo = null
     }
 
     fun clearError() { error = null; credencialesIncorrectas = false }
@@ -474,6 +537,52 @@ internal fun errorAltaObligacion(e: Exception): ErrorAltaObligacion {
         else -> ErrorAltaObligacion("No se pudo registrar: la operación entra en conflicto con los datos actuales. Recarga los datos.")
     }
 }
+
+/** FH-012: campo del formulario de tipos al que se liga un rechazo (null = mensaje general). */
+enum class CampoTipo { CODIGO, NOMBRE, PERIODICIDAD, DOCUMENTO }
+/** [codigo] = codigo estable del 409 del backend (DATOS_DESACTUALIZADOS, IMPACTO_NO_CONFIRMADO...). */
+data class ErrorGestionTipo(val mensaje: String, val campo: CampoTipo? = null, val codigo: String? = null,
+                            val obligacionesActivas: Long? = null)
+
+// FH-012: traduce los rechazos de la gestion de tipos. El cuerpo de error solo se lee una vez.
+internal fun errorGestionTipo(e: Exception): ErrorGestionTipo {
+    if (e !is HttpException || e.code() !in setOf(400, 404, 409)) return ErrorGestionTipo(mensajeError(e))
+    val cuerpo = try { e.response()?.errorBody()?.string().orEmpty() } catch (_: Exception) { "" }
+    return errorGestionTipo(e.code(), cuerpo)
+}
+
+internal fun errorGestionTipo(http: Int, cuerpo: String): ErrorGestionTipo {
+    val detalle = campoTextoJson(cuerpo, "detail").orEmpty()
+    val codigo = campoTextoJson(cuerpo, "codigo")
+    val obligaciones = campoNumeroJson(cuerpo, "obligacionesActivas")
+    val abiertas = campoNumeroJson(cuerpo, "intervencionesAbiertas")
+    return when (codigo) {
+        "CODIGO_DUPLICADO" -> ErrorGestionTipo("Ya existe un tipo con ese código.", CampoTipo.CODIGO, codigo)
+        "NOMBRE_DUPLICADO" -> ErrorGestionTipo("Ya existe un tipo con ese nombre.", CampoTipo.NOMBRE, codigo)
+        "DATOS_DESACTUALIZADOS" -> ErrorGestionTipo(
+            "Este tipo ha sido modificado por otro usuario. Actualiza los datos antes de guardar.", null, codigo)
+        "IMPACTO_NO_CONFIRMADO" -> ErrorGestionTipo(
+            "El tipo se usa en ${obligaciones ?: "varias"} obligaciones activas. Confirma el cambio para guardarlo.",
+            null, codigo, obligaciones)
+        "INTERVENCIONES_SIN_DOCUMENTO" -> ErrorGestionTipo(
+            "No se puede exigir documento: hay ${abiertas ?: "varias"} intervenciones abiertas de este tipo sin evidencias. " +
+                "Deben adjuntar una evidencia o resolverse antes del cambio.", CampoTipo.DOCUMENTO, codigo)
+        else -> when {
+            http == 404 -> ErrorGestionTipo("El tipo de mantenimiento ya no existe. Vuelve atrás y recarga la lista.")
+            detalle.contains("codigo de un tipo") -> ErrorGestionTipo("El código no se puede modificar.", CampoTipo.CODIGO)
+            detalle.startsWith("El codigo debe") -> ErrorGestionTipo(
+                "El código debe tener entre 2 y 40 caracteres: letras, números y guiones, sin espacios.", CampoTipo.CODIGO)
+            http == 400 -> ErrorGestionTipo("Datos no válidos. Revisa los campos marcados.")
+            else -> ErrorGestionTipo("No se pudo guardar: la operación entra en conflicto con los datos actuales. Recarga los datos.")
+        }
+    }
+}
+
+private fun campoTextoJson(cuerpo: String, campo: String): String? =
+    Regex("\"" + campo + "\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\.)*)\"").find(cuerpo)?.groupValues?.get(1)?.replace("\\\"", "\"")
+
+private fun campoNumeroJson(cuerpo: String, campo: String): Long? =
+    Regex("\"" + campo + "\"\\s*:\\s*(\\d+)").find(cuerpo)?.groupValues?.get(1)?.toLongOrNull()
 
 // Extrae "detail" de la respuesta ProblemDetail sin dependencias adicionales.
 private fun detalleError(e: HttpException): String? = try {

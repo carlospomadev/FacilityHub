@@ -108,7 +108,8 @@ Todos requieren `Authorization: Bearer <token>`, salvo el login y `/actuator/hea
 | Centros y locales | `GET /api/centros`, `/api/centros/{id}`, `/api/centros/{id}/locales`; `GET /api/locales/{id}/inquilino-actual`, `/api/locales/{id}/instalaciones` | gestión e INQUILINO (su local) |
 | Instalaciones (RF-07) | `GET` y `POST /api/centros/{id}/instalaciones`: alta en un local o en la zona común (`localId` nulo); 201 con la instalación creada | gestión |
 | Alta de obligaciones (RF-09) | `GET` y `POST /api/centros/{id}/obligaciones`: alta con `localId?`, `instalacionId?`, `tipoMantenimientoId`, `responsable`, `fechaInicio` y `proximaFecha?`; 201 con la obligación creada. No crea mantenimientos | gestión |
-| Tipos de mantenimiento | `GET /api/tipos-mantenimiento`: tipos activos con su periodicidad (solo lectura) | gestión |
+| Tipos de mantenimiento | `GET /api/tipos-mantenimiento`: tipos activos con su periodicidad, para el formulario de obligaciones | gestión |
+| Catálogo de tipos (RF-08) | `GET /api/tipos-mantenimiento/catalogo` y `GET /api/tipos-mantenimiento/{id}` (activos e inactivos, con su uso y una `huella`); `POST /api/tipos-mantenimiento`; `PATCH /api/tipos-mantenimiento/{id}` (con `huella` y, si hay uso, `confirmarImpacto`); `PATCH /api/tipos-mantenimiento/{id}/activo` | consulta: gestión; escritura: ADMIN |
 | Obligaciones | `GET /api/locales/{id}/obligaciones`; `GET` y `POST /api/obligaciones/{id}/mantenimientos`; `PATCH /api/obligaciones/{id}/responsable` | consulta: gestión e INQUILINO; escritura: gestión |
 | Mantenimientos | `PATCH /api/mantenimientos/{id}/estado` (sin FINALIZADO); `GET`, `PUT` y `DELETE /api/mantenimientos/{id}/asignacion` | gestión |
 | Intervenciones | `GET` y `POST /api/mantenimientos/{id}/intervenciones`; `GET` y `PATCH /api/intervenciones/{id}`; `POST …/{id}/documentos`, `POST …/{id}/envio`; `GET …/{id}/documentos/{docId}/archivo` | gestión y PROVEEDOR asignado |
@@ -128,9 +129,25 @@ Todos requieren `Authorization: Bearer <token>`, salvo el login y `/actuator/hea
 - 403: rol sin permiso;
 - 404 uniforme: recurso inexistente o ajeno;
 - 409: conflicto de versión o de estado, recurso inactivo, duplicado o, en obligaciones INQUILINO, local sin ocupación vigente.
+  - En el catálogo de tipos, el 409 lleva además un campo `codigo`:
+
+    | Código | Significado |
+    |---|---|
+    | `CODIGO_DUPLICADO` | Ya existe un tipo con ese código |
+    | `NOMBRE_DUPLICADO` | Ya existe un tipo con ese nombre |
+    | `DATOS_DESACTUALIZADOS` | Otro usuario ha cambiado el tipo |
+    | `IMPACTO_NO_CONFIRMADO` | El cambio afecta a obligaciones activas y falta la confirmación |
+    | `INTERVENCIONES_SIN_DOCUMENTO` | Hay intervenciones abiertas sin evidencias que quedarían bloqueadas |
+
+**Cómo se protege el catálogo de tipos (FH-012):**
+- **Escrituras de una en una:** se serializan con un bloqueo asesor transaccional de PostgreSQL (`pg_advisory_xact_lock`) y después con el bloqueo de la fila del tipo, siempre en ese orden. Así no se crean dos tipos con el mismo nombre aunque haya varias instancias del backend.
+- **Límite:** la regla de nombres repetidos la comprueba el servicio; un `INSERT` hecho por SQL fuera de la aplicación no queda protegido, porque no hay índice único de nombre (no se ha creado V11).
+- **Huella:** al abrir un tipo, la API devuelve una huella (SHA-256 de sus valores). Al guardar se compara con la actual dentro de la misma transacción bloqueada.
+- **Límite de la huella:** si otro usuario cambia un valor y lo vuelve a dejar igual, la huella vuelve a coincidir y ese cambio no se detecta.
+- **Exigir documento:** solo se permite si no quedan intervenciones abiertas del tipo (`BORRADOR` o `REQUIERE_CORRECCION`, con resultado ejecutado o sin decidir) sin ninguna evidencia.
 
 ## Pruebas
-- **Unitarias:** `mvn test` ejecuta 164 pruebas (Mockito) sin base de datos.
+- **Unitarias:** `mvn test` ejecuta 172 pruebas (Mockito) sin base de datos.
 - **Integración (`*IT`):** MockMvc, JWT y JPQL reales con *rollback* por prueba.
   - Una barrera (`P4Entorno`) solo permite ejecutarlas contra la base de pruebas dedicada `facilityhub_fh005_p3`, con `-Dp4.autorizado=facilityhub_fh005_p3` y la variable `P4_DB_PASSWORD`.
   - No se lanzan con `mvn test` por defecto.

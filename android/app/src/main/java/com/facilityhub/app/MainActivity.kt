@@ -279,6 +279,25 @@ fun FacilityHubApp(
                     }
                 }
 
+                // FH-012 / RF-08: catalogo de tipos de mantenimiento y su formulario (alta y edicion solo ADMIN).
+                composable("tipos-mantenimiento") {
+                    TiposMantenimientoScreen(
+                        vm = vm,
+                        onNuevo = { nav.navigate("tipo-nuevo") },
+                        onTipo = { t -> nav.navigate("tipo-editar/${t.id}") },
+                        onBack = { nav.popBackStack() }
+                    )
+                }
+
+                composable("tipo-nuevo") {
+                    TipoFormScreen(vm = vm, tipoId = null, onCancelar = { nav.popBackStack() }, onGuardado = { nav.popBackStack() })
+                }
+
+                composable("tipo-editar/{id}", arguments = listOf(navArgument("id") { type = NavType.LongType })) { entry ->
+                    TipoFormScreen(vm = vm, tipoId = entry.arguments!!.getLong("id"),
+                        onCancelar = { nav.popBackStack() }, onGuardado = { nav.popBackStack() })
+                }
+
                 composable("declaraciones") {
                     DeclaracionesScreen(flujo) { nav.popBackStack() }
                 }
@@ -361,7 +380,9 @@ private val ACCESOS_GESTION = listOf(
     "validaciones" to "Validaciones",
     "proveedores" to "Proveedores",
     "declaraciones" to "Declarados",
-    "solicitudes-gestion" to "Solicitudes"
+    "solicitudes-gestion" to "Solicitudes",
+    // FH-012 / RF-08: catalogo de tipos (ADMIN gestiona; EXPLOTACION consulta).
+    "tipos-mantenimiento" to "Tipos de mantenimiento"
 )
 
 // Navegacion dentro de un centro: locales, ficha del local, mantenimientos y documentos (sin cambios en R3).

@@ -27,6 +27,21 @@ data class CrearObligacionRequest(
     val localId: Long?, val instalacionId: Long?, val tipoMantenimientoId: Long, val responsable: String,
     val fechaInicio: String, val proximaFecha: String?, val observaciones: String?
 )
+// FH-012 / RF-08: gestion del catalogo de tipos (huella = valores actuales, para detectar cambios de otro usuario).
+data class TipoGestionDto(
+    val id: Long, val codigo: String, val nombre: String, val descripcion: String?, val periodicidadMeses: Int,
+    val requiereDocumento: Boolean, val reglaRecalculo: String, val activo: Boolean, val obligacionesActivas: Long,
+    val huella: String
+)
+data class CrearTipoRequest(
+    val codigo: String, val nombre: String, val descripcion: String?, val periodicidadMeses: Int,
+    val requiereDocumento: Boolean, val reglaRecalculo: String
+)
+data class EditarTipoRequest(
+    val nombre: String, val descripcion: String?, val periodicidadMeses: Int, val requiereDocumento: Boolean,
+    val reglaRecalculo: String, val huella: String, val confirmarImpacto: Boolean?
+)
+data class CambiarActivoTipoRequest(val activo: Boolean, val huella: String, val confirmarImpacto: Boolean?)
 data class CrearInstalacionRequest(val localId: Long?, val nombre: String, val tipo: String, val descripcion: String?, val estado: String)
 data class ObligacionDto(val id: Long, val localId: Long, val instalacion: String?, val tipoMantenimiento: String, val periodicidadMeses: Int, val proximaFecha: String, val estado: String)
 data class MantenimientoDto(val id: Long, val obligacionId: Long, val fechaProgramada: String, val fechaRealizacion: String?, val estado: String, val descripcion: String?, val observaciones: String?)

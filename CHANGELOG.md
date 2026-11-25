@@ -254,3 +254,36 @@ He añadido el alta de obligaciones de mantenimiento desde Android.
   | Preparación de la demo | 14/14 |
 
 - Publicado en el PR #16. El merge es `1b0c3ab`.
+
+## 23/11/2026 – Gestión de los tipos de mantenimiento (FH-012, RF-08)
+Hasta ahora el catálogo de tipos solo se podía consultar. He añadido su gestión desde Android para el rol ADMIN.
+- **Backend:**
+  - `GET /api/tipos-mantenimiento/catalogo` y `GET /api/tipos-mantenimiento/{id}` para consultar todos los tipos (también los inactivos) con su uso;
+  - `POST /api/tipos-mantenimiento` para dar de alta;
+  - `PATCH /api/tipos-mantenimiento/{id}` para editar;
+  - `PATCH /api/tipos-mantenimiento/{id}/activo` para desactivar o reactivar.
+  - `GET /api/tipos-mantenimiento` sigue igual: solo los activos, para el formulario de obligaciones.
+- **Reglas:**
+  - el código se fija al crear el tipo y no cambia; no se admiten códigos ni nombres repetidos;
+  - la periodicidad va de 1 a 120 meses y solo hay las dos reglas de cálculo que ya existían;
+  - si el tipo ya se usa, los cambios de periodicidad, regla o documento piden confirmación y se aplican a partir de ahora, sin cambiar las fechas guardadas;
+  - no se puede pasar a exigir documento mientras haya intervenciones abiertas sin evidencias;
+  - desactivar un tipo no borra ni cancela nada: solo deja de ofrecerse para obligaciones nuevas.
+- **Concurrencia:**
+  - las escrituras del catálogo se hacen de una en una con un bloqueo de PostgreSQL;
+  - una «huella» de los datos detecta si otro administrador ha cambiado el tipo mientras lo editabas.
+- **Auditoría:** todos los cambios quedan registrados en la tabla de auditoría que ya existía.
+- **Android:** pantalla «Tipos de mantenimiento» (EXPLOTACION solo consulta) y formulario de alta y edición, con avisos de impacto y confirmaciones.
+- **Base de datos:** no hay migraciones nuevas; la base principal sigue en V9.
+- **Pruebas:**
+
+  | Batería | Resultado |
+  |---|---|
+  | Unitarias | 172 |
+  | API | 26/26 |
+  | Android | 22/22 |
+  | API con ciclo completo | 66/66 |
+  | Regresión Android | 26/26 |
+  | Preparación de la demo | 14/14 |
+
+- **Corrección encontrada en las pruebas:** el campo Código desordenaba lo que se escribía al pasarlo a mayúsculas en cada pulsación; ahora se convierte al guardar.

@@ -46,4 +46,10 @@ public interface ObligacionMantenimientoRepository extends JpaRepository<Obligac
         order by case when l.id is null then 0 else 1 end, l.codigo, o.proximaFecha, t.nombre
         """)
     List<ObligacionMantenimiento> findActivasDelCentro(@Param("centroId") Long centroId);
+
+    // FH-012 / RF-08: obligaciones activas que usan un tipo (aviso de impacto) y recuento por tipo (catalogo).
+    long countByTipoMantenimientoIdAndActivoTrue(Long tipoId);
+
+    @Query("select o.tipoMantenimiento.id, count(o) from ObligacionMantenimiento o where o.activo = true group by o.tipoMantenimiento.id")
+    List<Object[]> contarActivasPorTipo();
 }
