@@ -10,14 +10,14 @@ Cliente móvil de FacilityHub:
 | Carpeta o archivo | Contenido |
 |---|---|
 | `data/` | `FacilityApi` (Retrofit), `FacilityRepository`, modelos (`Models.kt`, `ModelsP6.kt`), `NetworkProvider` (URL base y token) y `TokenStore` |
-| `ui/` | Pantallas Compose y ViewModels: `FacilityViewModel`, `FlujoViewModel`, `AlertasViewModel`, `PanelViewModel` y `HistorialViewModel`. Además: `Navegacion.kt` (barra inferior por rol), `EstadoCarga.kt` (estado de cada pantalla), `CampoFecha.kt` (selector de fecha), `InstalacionScreens.kt` y `ObligacionScreens.kt` (formularios de alta) |
+| `ui/` | Pantallas Compose y ViewModels: `FacilityViewModel`, `FlujoViewModel`, `AlertasViewModel`, `PanelViewModel` y `HistorialViewModel`. Además: `Navegacion.kt` (barra inferior por rol), `EstadoCarga.kt` (estado de cada pantalla), `CampoFecha.kt` (selector de fecha), `InstalacionScreens.kt` y `ObligacionScreens.kt` (formularios de alta) y `TiposScreens.kt` (catálogo de tipos) |
 | `ui/theme/` | Tema Material 3 claro y oscuro, espaciados e iconos |
 | `MainActivity.kt` | Navegación y pantalla inicial según el rol |
 
 ## Pantallas por rol
 | Rol | Pantallas |
 |---|---|
-| ADMIN y EXPLOTACION | **Pestañas:** Panel, Centros, Validaciones (EXPLOTACION) o Proveedores (ADMIN) y Avisos. **Centros:** Centros → Locales → Detalle del local (inquilino, instalaciones, obligaciones e **Historial**) → Mantenimientos y documentos. **Panel de Explotación:** indicadores y bandejas por filtro. **Altas:** «Instalaciones» del centro, con **Nueva instalación** (en local o zona común) y **Nueva obligación** (desde el local o la zona común). **Otras pantallas:** Validaciones, Proveedores, Declarados y Solicitudes. **Gestión:** asignación del mantenimiento e intervención (aprobar, pedir corrección o cerrar) |
+| ADMIN y EXPLOTACION | **Pestañas:** Panel, Centros, Validaciones (EXPLOTACION) o Proveedores (ADMIN) y Avisos. **Centros:** Centros → Locales → Detalle del local (inquilino, instalaciones, obligaciones e **Historial**) → Mantenimientos y documentos. **Panel de Explotación:** indicadores y bandejas por filtro. **Altas:** «Instalaciones» del centro, con **Nueva instalación** (en local o zona común) y **Nueva obligación** (desde el local o la zona común). **Otras pantallas:** Validaciones, Proveedores, Declarados, Solicitudes y **Tipos de mantenimiento** (ADMIN: alta, edición, desactivación y reactivación con avisos de impacto; EXPLOTACION: solo consulta). **Gestión:** asignación del mantenimiento e intervención (aprobar, pedir corrección o cerrar) |
 | INQUILINO | **Pestañas:** Mi local, Solicitudes y Avisos. **Mi local:** obligaciones (declarar o solicitar proveedor) e historial del local, con descarga de certificados compartidos. **Mantenimientos:** fecha prevista, asignación del proveedor aceptado y certificados |
 | PROVEEDOR | **Pestañas:** Trabajos y Avisos. **Mis trabajos** por fases (Por hacer, Corrección y Enviados) → detalle del trabajo → Intervención (registrar, adjuntar evidencias y enviar a validación) |
 | Todos | Avisos (alertas) y menú de cuenta con «Cerrar sesión» |
@@ -55,5 +55,6 @@ La app se ha validado en un emulador Pixel_6 contra bases de datos desechables e
 | Regresión | 26/26 |
 | Alta de instalaciones | 18/18 |
 | Alta de obligaciones | 21/21 |
+| Gestión de tipos | 22/22 |
 
 No hay pruebas instrumentadas en el módulo Android. Las capturas y los informes de cada fase están fuera del repositorio.

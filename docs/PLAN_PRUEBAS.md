@@ -57,6 +57,7 @@ $env:FACILITYHUB_ADMIN_PASSWORD = "<contraseña de admin@facilityhub.local>"
    - Centros → Locales → Detalle del local → Historial;
    - Detalle del local → **Registrar instalación** y **Registrar obligación** (tipo del catálogo, periodicidad y próxima fecha calculada);
    - Centros → Locales → **Instalaciones del centro** → alta de una instalación o una obligación de zona común;
+   - Centros → **Tipos de mantenimiento**: EXPLOTACION solo consulta; con ADMIN, alta, edición (aviso de impacto si el tipo está en uso) y desactivación;
    - Panel de Explotación con sus filtros;
    - Validaciones → Intervención (Aprobar o Pedir corrección).
 3. **INQUILINO:** Mi local (obligaciones) → Mantenimientos (certificados compartidos) → Historial del local y descarga de un certificado. No ve accesos de alta.
@@ -68,7 +69,7 @@ $env:FACILITYHUB_ADMIN_PASSWORD = "<contraseña de admin@facilityhub.local>"
 - un 401 devuelve al login y los errores de conexión muestran «Reintentar».
 
 ## P-04 Pruebas automatizadas del backend
-- **`mvn test`:** 164 pruebas unitarias sin base de datos. Resultado esperado: `BUILD SUCCESS`.
+- **`mvn test`:** 172 pruebas unitarias sin base de datos. Resultado esperado: `BUILD SUCCESS`.
 - **Pruebas de integración (`*IT`):** solo contra la base de pruebas dedicada y protegida por la barrera `P4Entorno` (ver `backend/README.md`).
 
 ## P-05 Evidencias para la memoria
@@ -93,12 +94,12 @@ Ver [`scripts/demo/README.md`](../scripts/demo/README.md). Todo se ejecuta sobre
 
 Validar y Android modifican datos: después hay que ejecutar `PrepararPresentacion`.
 
-**Últimos resultados comprobados** (23/11/2026, con el código de `main` hasta FH-010B):
+**Últimos resultados comprobados** (23/11/2026, con el código de FH-012):
 
 | Prueba | Resultado |
 |---|---|
 | `PrepararPresentacion` | 14/14 |
 | `Validar -ConCicloCompleto` | 66/66 |
 | `Android` | 26/26 |
-| Unitarias del backend | 164/164 |
+| Unitarias del backend | 172/172 |
 | Integración con barrera (`InstalacionesFH010AP6IT`) | 9/9 |
