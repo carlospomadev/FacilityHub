@@ -56,6 +56,22 @@ interface FacilityApi {
     @PATCH("api/tipos-mantenimiento/{id}/activo")
     suspend fun cambiarActivoTipo(@Path("id") id: Long, @Body body: CambiarActivoTipoRequest): TipoGestionDto
 
+    // FH-013 / RF-03: gestion de centros (consulta: gestion; escritura: ADMIN).
+    @GET("api/centros/gestion")
+    suspend fun catalogoCentros(): List<CentroGestionDto>
+
+    @GET("api/centros/gestion/{id}")
+    suspend fun centroGestion(@Path("id") id: Long): CentroGestionDto
+
+    @POST("api/centros")
+    suspend fun crearCentro(@Body body: CrearCentroRequest): CentroGestionDto
+
+    @PATCH("api/centros/{id}")
+    suspend fun editarCentro(@Path("id") id: Long, @Body body: EditarCentroRequest): CentroGestionDto
+
+    @PATCH("api/centros/{id}/activo")
+    suspend fun cambiarActivoCentro(@Path("id") id: Long, @Body body: CambiarActivoCentroRequest): CentroGestionDto
+
     @GET("api/centros/{id}/obligaciones")
     suspend fun obligacionesCentro(@Path("id") centroId: Long): List<ObligacionCentroDto>
 

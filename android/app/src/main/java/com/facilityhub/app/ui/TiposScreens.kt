@@ -358,8 +358,9 @@ private fun OpcionRegla(valor: String, explicacion: String, seleccion: String, e
     }
 }
 
+// FH-013: compartido con el formulario de centros.
 @Composable
-private fun CampoSimple(
+internal fun CampoSimple(
     valor: String,
     onValor: (String) -> Unit,
     etiqueta: String,
