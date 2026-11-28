@@ -69,7 +69,7 @@ $env:FACILITYHUB_ADMIN_PASSWORD = "<contraseña de admin@facilityhub.local>"
 - un 401 devuelve al login y los errores de conexión muestran «Reintentar».
 
 ## P-04 Pruebas automatizadas del backend
-- **`mvn test`:** 172 pruebas unitarias sin base de datos. Resultado esperado: `BUILD SUCCESS`.
+- **`mvn test`:** 183 pruebas unitarias sin base de datos. Resultado esperado: `BUILD SUCCESS`.
 - **Pruebas de integración (`*IT`):** solo contra la base de pruebas dedicada y protegida por la barrera `P4Entorno` (ver `backend/README.md`).
 
 ## P-05 Evidencias para la memoria
@@ -94,12 +94,12 @@ Ver [`scripts/demo/README.md`](../scripts/demo/README.md). Todo se ejecuta sobre
 
 Validar y Android modifican datos: después hay que ejecutar `PrepararPresentacion`.
 
-**Últimos resultados comprobados** (23/11/2026, con el código de FH-012):
+**Últimos resultados comprobados** (28/11/2026, con el código de FH-013):
 
 | Prueba | Resultado |
 |---|---|
 | `PrepararPresentacion` | 14/14 |
 | `Validar -ConCicloCompleto` | 66/66 |
 | `Android` | 26/26 |
-| Unitarias del backend | 172/172 |
+| Unitarias del backend | 183/183 |
 | Integración con barrera (`InstalacionesFH010AP6IT`) | 9/9 |

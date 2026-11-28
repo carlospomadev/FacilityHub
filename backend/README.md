@@ -110,6 +110,7 @@ Todos requieren `Authorization: Bearer <token>`, salvo el login y `/actuator/hea
 | Alta de obligaciones (RF-09) | `GET` y `POST /api/centros/{id}/obligaciones`: alta con `localId?`, `instalacionId?`, `tipoMantenimientoId`, `responsable`, `fechaInicio` y `proximaFecha?`; 201 con la obligación creada. No crea mantenimientos | gestión |
 | Tipos de mantenimiento | `GET /api/tipos-mantenimiento`: tipos activos con su periodicidad, para el formulario de obligaciones | gestión |
 | Catálogo de tipos (RF-08) | `GET /api/tipos-mantenimiento/catalogo` y `GET /api/tipos-mantenimiento/{id}` (activos e inactivos, con su uso y una `huella`); `POST /api/tipos-mantenimiento`; `PATCH /api/tipos-mantenimiento/{id}` (con `huella` y, si hay uso, `confirmarImpacto`); `PATCH /api/tipos-mantenimiento/{id}/activo` | consulta: gestión; escritura: ADMIN |
+| Gestión de centros (RF-03) | `GET /api/centros/gestion` y `GET /api/centros/gestion/{id}` (activos e inactivos, con su uso y una `huella`); `POST /api/centros`; `PATCH /api/centros/{id}` (con `huella`); `PATCH /api/centros/{id}/activo` (con `huella` y, al desactivar, `confirmarImpacto`) | consulta: gestión; escritura: ADMIN |
 | Obligaciones | `GET /api/locales/{id}/obligaciones`; `GET` y `POST /api/obligaciones/{id}/mantenimientos`; `PATCH /api/obligaciones/{id}/responsable` | consulta: gestión e INQUILINO; escritura: gestión |
 | Mantenimientos | `PATCH /api/mantenimientos/{id}/estado` (sin FINALIZADO); `GET`, `PUT` y `DELETE /api/mantenimientos/{id}/asignacion` | gestión |
 | Intervenciones | `GET` y `POST /api/mantenimientos/{id}/intervenciones`; `GET` y `PATCH /api/intervenciones/{id}`; `POST …/{id}/documentos`, `POST …/{id}/envio`; `GET …/{id}/documentos/{docId}/archivo` | gestión y PROVEEDOR asignado |
@@ -139,6 +140,14 @@ Todos requieren `Authorization: Bearer <token>`, salvo el login y `/actuator/hea
     | `IMPACTO_NO_CONFIRMADO` | El cambio afecta a obligaciones activas y falta la confirmación |
     | `INTERVENCIONES_SIN_DOCUMENTO` | Hay intervenciones abiertas sin evidencias que quedarían bloqueadas |
 
+  - En la gestión de centros (FH-013) se usan los mismos códigos `CODIGO_DUPLICADO`, `NOMBRE_DUPLICADO` (mismo nombre en la misma ciudad), `DATOS_DESACTUALIZADOS` e `IMPACTO_NO_CONFIRMADO`, y además `CENTRO_EN_USO` (no se puede desactivar: el 409 lleva `ocupacionesVigentes`, `ocupacionesFuturas` y `mantenimientosAbiertos`).
+
+**Cómo se protege la gestión de centros (FH-013):**
+- Mismo esquema que los tipos: bloqueo asesor propio del catálogo de centros y después bloqueo de la fila del centro; huella SHA-256 de sus valores; sin migraciones nuevas.
+- **Trabajo abierto:** un mantenimiento cuenta como abierto si no está cancelado ni tiene una intervención aprobada, y está `PROGRAMADO`, `PENDIENTE` o `EN_PROCESO` o tiene una intervención en `BORRADOR`, `PENDIENTE_VALIDACION` o `REQUIERE_CORRECCION`. Una ocupación es vigente si está activa y la fecha de hoy (Europe/Madrid) está entre su inicio y su fin, y es futura si está activa, empieza después de hoy y no ha terminado. Las dos bloquean la desactivación, aunque se confirme.
+- **Centro inactivo:** no admite instalaciones, obligaciones ni mantenimientos nuevos (`POST /api/obligaciones/{id}/mantenimientos` también lo comprueba). El alta de un mantenimiento bloquea la misma fila del centro que la desactivación, así que las dos operaciones no se cruzan.
+- **Límites:** el nombre + ciudad repetido lo comprueba el servicio (no hay índice único, no se ha creado V11); el panel y los recordatorios no se han cambiado y siguen mostrando el trabajo pendiente que ya existía.
+
 **Cómo se protege el catálogo de tipos (FH-012):**
 - **Escrituras de una en una:** se serializan con un bloqueo asesor transaccional de PostgreSQL (`pg_advisory_xact_lock`) y después con el bloqueo de la fila del tipo, siempre en ese orden. Así no se crean dos tipos con el mismo nombre aunque haya varias instancias del backend.
 - **Límite:** la regla de nombres repetidos la comprueba el servicio; un `INSERT` hecho por SQL fuera de la aplicación no queda protegido, porque no hay índice único de nombre (no se ha creado V11).
@@ -147,7 +156,7 @@ Todos requieren `Authorization: Bearer <token>`, salvo el login y `/actuator/hea
 - **Exigir documento:** solo se permite si no quedan intervenciones abiertas del tipo (`BORRADOR` o `REQUIERE_CORRECCION`, con resultado ejecutado o sin decidir) sin ninguna evidencia.
 
 ## Pruebas
-- **Unitarias:** `mvn test` ejecuta 172 pruebas (Mockito) sin base de datos.
+- **Unitarias:** `mvn test` ejecuta 183 pruebas (Mockito) sin base de datos.
 - **Integración (`*IT`):** MockMvc, JWT y JPQL reales con *rollback* por prueba.
   - Una barrera (`P4Entorno`) solo permite ejecutarlas contra la base de pruebas dedicada `facilityhub_fh005_p3`, con `-Dp4.autorizado=facilityhub_fh005_p3` y la variable `P4_DB_PASSWORD`.
   - No se lanzan con `mvn test` por defecto.
