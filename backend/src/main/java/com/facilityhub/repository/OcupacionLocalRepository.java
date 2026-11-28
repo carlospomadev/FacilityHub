@@ -109,4 +109,26 @@ public interface OcupacionLocalRepository extends JpaRepository<OcupacionLocal, 
           and (o.fechaFin is null or o.fechaFin >= :hoy)
         """)
     long contarFuturasDelCentro(@Param("centroId") Long centroId, @Param("hoy") java.time.LocalDate hoy);
+
+    // FH-014 / RF-04 (D4): las mismas definiciones de FH-013 aplicadas a un local. Bloquean su desactivacion.
+    @Query("""
+        select count(o) from OcupacionLocal o
+        where o.local.id = :localId
+          and o.activo = true
+          and o.fechaInicio <= :hoy
+          and (o.fechaFin is null or o.fechaFin >= :hoy)
+        """)
+    long contarVigentesDelLocal(@Param("localId") Long localId, @Param("hoy") LocalDate hoy);
+
+    @Query("""
+        select count(o) from OcupacionLocal o
+        where o.local.id = :localId
+          and o.activo = true
+          and o.fechaInicio > :hoy
+          and (o.fechaFin is null or o.fechaFin >= :hoy)
+        """)
+    long contarFuturasDelLocal(@Param("localId") Long localId, @Param("hoy") LocalDate hoy);
+
+    // FH-014 / RF-04: todas las ocupaciones del local (historico incluido), solo informativo.
+    long countByLocalId(Long localId);
 }

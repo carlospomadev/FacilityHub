@@ -117,7 +117,9 @@ fun CentroFormScreen(
     vm: FacilityViewModel,
     centroId: Long?,
     onCancelar: () -> Unit,
-    onGuardado: () -> Unit
+    onGuardado: () -> Unit,
+    // FH-014 / RF-04 (D8): gestion de los locales de este centro (solo en edicion).
+    onLocales: ((CentroGestionDto) -> Unit)? = null
 ) {
     val edicion = centroId != null
     var cargado by rememberSaveable { mutableStateOf(!edicion) }
@@ -238,6 +240,14 @@ fun CentroFormScreen(
         CampoTexto(valor = descripcion, onValor = { descripcion = it }, etiqueta = "Descripción (opcional)",
             error = errorDescripcion, maximo = MAX_DESCRIPCION_CENTRO, enabled = !enviando, multilinea = true)
 
+        if (edicion && original != null && onLocales != null) {
+            Spacer(Modifier.height(FhEspacio.l))
+            SectionTitle("Locales")
+            OutlinedButton(onClick = { onLocales(original) }, enabled = !enviando,
+                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+                Text("Gestionar locales")
+            }
+        }
         if (edicion && original != null) {
             Spacer(Modifier.height(FhEspacio.l))
             SectionTitle("Disponibilidad")

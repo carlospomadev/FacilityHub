@@ -33,7 +33,7 @@ Los permisos se comprueban siempre en el backend. El rol se vuelve a leer de la 
 ## Funcionalidades
 
 - **Autenticación JWT y control de acceso** por rol y por recurso.
-- **Consulta de centros, locales e inquilino actual.** Estos datos maestros se cargan mediante migraciones; no hay pantallas de alta (RF-03, RF-04 y RF-05 son solo de consulta).
+- **Consulta de centros, locales e inquilino actual.** Centros y locales se gestionan desde la app (RF-03 y RF-04); los inquilinos se siguen cargando mediante migraciones (RF-05 es solo de consulta).
 - **Registro de instalaciones (RF-07, FH-010A):**
   - alta desde la app en un local o en la **zona común** del centro;
   - nombre, tipo, descripción y estado;
@@ -76,6 +76,13 @@ Los permisos se comprueban siempre en el backend. El rol se vuelve a leer de la 
   - no se puede desactivar un centro con ocupaciones vigentes o futuras (activas, que aún no han empezado) o con mantenimientos abiertos; si no los tiene, se pide confirmación con un resumen de lo que contiene;
   - desactivar no borra nada (locales, instalaciones, obligaciones e historial se conservan) y el centro inactivo no admite instalaciones, obligaciones ni mantenimientos nuevos;
   - si otro administrador ha cambiado el centro mientras lo editas, la app avisa y no se sobrescribe nada; cada cambio queda en la auditoría.
+- **Gestión de locales (RF-04, FH-014):**
+  - desde la lista de locales de un centro (o desde la ficha del centro en «Gestionar centros») → «Gestionar locales»: ADMIN da de alta, edita, desactiva y reactiva locales; EXPLOTACION los consulta todos, también los inactivos;
+  - la lista «Locales» del centro sigue mostrando solo los activos;
+  - código obligatorio, único dentro del centro y que no se puede cambiar; nombre obligatorio (puede repetirse); planta y ubicación opcionales; un local no puede cambiar de centro;
+  - no se puede desactivar un local con ocupaciones vigentes o futuras o con mantenimientos abiertos; si no los tiene, se pide confirmación con un resumen (instalaciones, obligaciones, historial);
+  - desactivar no borra nada y el local inactivo no admite instalaciones, obligaciones ni mantenimientos nuevos; en un centro inactivo no se pueden crear ni reactivar locales;
+  - si otro administrador ha cambiado el local mientras lo editas, la app avisa y no se sobrescribe nada; cada cambio queda en la auditoría.
 - **Mejoras de diseño en la app Android (FH-009):**
   - Material 3 con tema claro y oscuro, y navegación inferior por rol;
   - panel de Explotación y selector de fecha en español;
@@ -116,22 +123,23 @@ Toda la información sensible va en variables de entorno, nunca en el repositori
 **Usuarios de demostración** (creados por la migración V3): `admin@facilityhub.local`, `explotacion@facilityhub.local` e `inquilino@facilityhub.local`. Las contraseñas no se publican en el repositorio: las facilita el responsable del proyecto. Los usuarios PROVEEDOR los da de alta un ADMIN desde la API.
 
 ## Pruebas y validación
-- `mvn test` en `backend/`: **183 pruebas unitarias** (sin base de datos).
+- `mvn test` en `backend/`: **193 pruebas unitarias** (sin base de datos).
 - **Pruebas de integración (`*IT`):** se ejecutan contra una base de pruebas dedicada con una barrera de seguridad. Ver [`backend/README.md`](backend/README.md#pruebas).
 - **`scripts/validar-api.ps1`:** recorrido completo de la API con el circuito vigente (mantenimiento → intervención → envío → validación).
 - **Demostración reproducible** ([`scripts/demo/`](scripts/demo/README.md)): base desechable propia con comprobaciones automáticas.
 
-Últimos resultados (FH-013, 28/11/2026; todas las pruebas que escriben datos se ejecutan en bases desechables):
+Últimos resultados (FH-014, 28/11/2026; todas las pruebas que escriben datos se ejecutan en bases desechables):
 
 | Batería | Resultado |
 |---|---|
-| Unitarias del backend | 183/183 |
+| Unitarias del backend | 193/193 |
 | Integración con barrera (`InstalacionesFH010AP6IT`) | 9/9 |
 | API de la demo con ciclo completo | 66/66 |
 | Alta de instalaciones: API / Android | 27/27 / 18/18 |
 | Alta de obligaciones: API / Android | 43/43 / 21/21 |
 | Gestión de tipos: API / Android | 26/26 / 22/22 |
 | Gestión de centros: API / Android | 34/34 / 22/22 |
+| Gestión de locales: API / Android | 38/38 / 23/23 |
 | Migración V10 en bases desechables | 12/12 |
 | Regresión Android (los cuatro roles) | 26/26 |
 | Preparación de la demo | 14/14 |
@@ -146,7 +154,7 @@ Requisitos funcionales del informe de avance v0.7 y su estado en `main`:
 | RF-01 | Autenticación | Completo (JWT) |
 | RF-02 | Roles | Completo (ADMIN, EXPLOTACION, INQUILINO y PROVEEDOR) |
 | RF-03 | Centros | **Completo:** alta, edición, desactivación y reactivación desde la app (FH-013) |
-| RF-04 | Locales | Consulta; sin alta ni edición |
+| RF-04 | Locales | **Completo:** alta, edición, desactivación y reactivación desde la app (FH-014) |
 | RF-05 | Inquilinos | Consulta del inquilino actual; sin alta |
 | RF-06 | Ocupación e histórico | Completo |
 | RF-07 | Instalaciones | **Completo:** alta desde la app (FH-010A); sin edición |
@@ -157,7 +165,7 @@ Requisitos funcionales del informe de avance v0.7 y su estado en `main`:
 | RF-12 | Consulta de cumplimiento | Completo (historial del local y panel de Explotación) |
 
 **Pendiente:**
-- dar de alta y editar centros, locales e inquilinos (RF-03 a RF-05);
+- dar de alta y editar inquilinos (RF-05);
 - editar instalaciones y obligaciones ya registradas;
 - validar el arranque con Docker Compose y con `mvn spring-boot:run` (ver la tabla de vías de arranque).
 

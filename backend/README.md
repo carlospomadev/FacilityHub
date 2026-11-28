@@ -111,6 +111,7 @@ Todos requieren `Authorization: Bearer <token>`, salvo el login y `/actuator/hea
 | Tipos de mantenimiento | `GET /api/tipos-mantenimiento`: tipos activos con su periodicidad, para el formulario de obligaciones | gestión |
 | Catálogo de tipos (RF-08) | `GET /api/tipos-mantenimiento/catalogo` y `GET /api/tipos-mantenimiento/{id}` (activos e inactivos, con su uso y una `huella`); `POST /api/tipos-mantenimiento`; `PATCH /api/tipos-mantenimiento/{id}` (con `huella` y, si hay uso, `confirmarImpacto`); `PATCH /api/tipos-mantenimiento/{id}/activo` | consulta: gestión; escritura: ADMIN |
 | Gestión de centros (RF-03) | `GET /api/centros/gestion` y `GET /api/centros/gestion/{id}` (activos e inactivos, con su uso y una `huella`); `POST /api/centros`; `PATCH /api/centros/{id}` (con `huella`); `PATCH /api/centros/{id}/activo` (con `huella` y, al desactivar, `confirmarImpacto`) | consulta: gestión; escritura: ADMIN |
+| Gestión de locales (RF-04) | `GET /api/centros/{id}/locales/gestion` y `GET /api/locales/gestion/{id}` (activos e inactivos, con su centro, su uso y una `huella`); `POST /api/centros/{id}/locales`; `PATCH /api/locales/{id}` (con `huella`; `codigo` y `centroId`, si se envían, deben coincidir); `PATCH /api/locales/{id}/activo` (con `huella` y, al desactivar, `confirmarImpacto`). `GET /api/centros/{id}/locales` no cambia (solo activos) | consulta: gestión; escritura: ADMIN |
 | Obligaciones | `GET /api/locales/{id}/obligaciones`; `GET` y `POST /api/obligaciones/{id}/mantenimientos`; `PATCH /api/obligaciones/{id}/responsable` | consulta: gestión e INQUILINO; escritura: gestión |
 | Mantenimientos | `PATCH /api/mantenimientos/{id}/estado` (sin FINALIZADO); `GET`, `PUT` y `DELETE /api/mantenimientos/{id}/asignacion` | gestión |
 | Intervenciones | `GET` y `POST /api/mantenimientos/{id}/intervenciones`; `GET` y `PATCH /api/intervenciones/{id}`; `POST …/{id}/documentos`, `POST …/{id}/envio`; `GET …/{id}/documentos/{docId}/archivo` | gestión y PROVEEDOR asignado |
@@ -142,6 +143,13 @@ Todos requieren `Authorization: Bearer <token>`, salvo el login y `/actuator/hea
 
   - En la gestión de centros (FH-013) se usan los mismos códigos `CODIGO_DUPLICADO`, `NOMBRE_DUPLICADO` (mismo nombre en la misma ciudad), `DATOS_DESACTUALIZADOS` e `IMPACTO_NO_CONFIRMADO`, y además `CENTRO_EN_USO` (no se puede desactivar: el 409 lleva `ocupacionesVigentes`, `ocupacionesFuturas` y `mantenimientosAbiertos`).
 
+**Cómo se protege la gestión de locales (FH-014):**
+- Códigos de error: `CODIGO_DUPLICADO` (mismo código en el mismo centro, sin distinguir mayúsculas), `CENTRO_INACTIVO` (alta o reactivación con el centro inactivo), `LOCAL_EN_USO` (no se puede desactivar: el 409 lleva `ocupacionesVigentes`, `ocupacionesFuturas` y `mantenimientosAbiertos`), `IMPACTO_NO_CONFIRMADO` (con el resumen) y `DATOS_DESACTUALIZADOS`. Cambiar el código o el centro devuelve 400.
+- **Bloqueos, siempre en el mismo orden:** primero la fila del centro y después la del local. Lo hacen el alta, la edición y la (des)activación del local, y también las altas de instalaciones, obligaciones y mantenimientos de un local, que leen su estado después de bloquearlo. Así una desactivación y un alta relacionada no se cruzan. Además, el índice `uq_local_centro_codigo` es la última defensa contra códigos repetidos. Huella SHA-256 de los valores; sin migraciones nuevas.
+- **Uso del local:** las mismas definiciones que en los centros (ocupación vigente o futura, mantenimiento abierto) aplicadas al local, con la fecha de Europe/Madrid. Bloquean la desactivación aunque se confirme.
+- **Local inactivo:** no admite instalaciones, obligaciones ni mantenimientos nuevos (también cuando la obligación viene de una instalación del local). Las obligaciones de zona común no cambian. No se modifica ningún dato relacionado.
+- **Límites:** las obligaciones activas de un local inactivo siguen apareciendo en el panel y pueden generar recordatorios y avisos de vencimiento (no se ha cambiado el módulo de alertas).
+
 **Cómo se protege la gestión de centros (FH-013):**
 - Mismo esquema que los tipos: bloqueo asesor propio del catálogo de centros y después bloqueo de la fila del centro; huella SHA-256 de sus valores; sin migraciones nuevas.
 - **Trabajo abierto:** un mantenimiento cuenta como abierto si no está cancelado ni tiene una intervención aprobada, y está `PROGRAMADO`, `PENDIENTE` o `EN_PROCESO` o tiene una intervención en `BORRADOR`, `PENDIENTE_VALIDACION` o `REQUIERE_CORRECCION`. Una ocupación es vigente si está activa y la fecha de hoy (Europe/Madrid) está entre su inicio y su fin, y es futura si está activa, empieza después de hoy y no ha terminado. Las dos bloquean la desactivación, aunque se confirme.
@@ -156,7 +164,7 @@ Todos requieren `Authorization: Bearer <token>`, salvo el login y `/actuator/hea
 - **Exigir documento:** solo se permite si no quedan intervenciones abiertas del tipo (`BORRADOR` o `REQUIERE_CORRECCION`, con resultado ejecutado o sin decidir) sin ninguna evidencia.
 
 ## Pruebas
-- **Unitarias:** `mvn test` ejecuta 183 pruebas (Mockito) sin base de datos.
+- **Unitarias:** `mvn test` ejecuta 193 pruebas (Mockito) sin base de datos.
 - **Integración (`*IT`):** MockMvc, JWT y JPQL reales con *rollback* por prueba.
   - Una barrera (`P4Entorno`) solo permite ejecutarlas contra la base de pruebas dedicada `facilityhub_fh005_p3`, con `-Dp4.autorizado=facilityhub_fh005_p3` y la variable `P4_DB_PASSWORD`.
   - No se lanzan con `mvn test` por defecto.

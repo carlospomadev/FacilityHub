@@ -234,7 +234,7 @@ class CentrosFH013UnitTest {
     void noSeCreanMantenimientosEnCentroInactivoD6() {
         IntervencionRepository intervencionRepository = mock(IntervencionRepository.class);
         MantenimientoService mantenimientoService = new MantenimientoService(mantenimientoRepository, obligacionRepository,
-            autorizacion, intervencionRepository, centroRepository);
+            autorizacion, intervencionRepository, centroRepository, localRepository);
         ObligacionMantenimiento obligacion = mock(ObligacionMantenimiento.class);
         when(obligacion.getCentro()).thenReturn(centro);
         when(obligacionRepository.findById(40L)).thenReturn(Optional.of(obligacion));

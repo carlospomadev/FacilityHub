@@ -106,7 +106,8 @@ public class ObligacionAltaService {
                 throw new IllegalArgumentException("La instalacion es de zona comun: la obligacion no puede tener local");
             }
         }
-        if (local != null && !local.isActivo()) {
+        // FH-014 / RF-04 (D7): bloqueo de la fila del local (despues del centro) frente a una desactivacion simultanea.
+        if (local != null && !localRepository.bloquearYEstaActivo(local.getId())) {
             throw new ConflictoException("El local esta inactivo");
         }
 

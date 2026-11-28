@@ -315,3 +315,33 @@ Hasta ahora los centros solo se podían consultar. He añadido su gestión desde
   | API con ciclo completo | 66/66 |
   | Regresión Android | 26/26 |
   | Preparación de la demo | 14/14 |
+
+## 28/11/2026 – Gestión de locales (FH-014, RF-04)
+Hasta ahora los locales solo se podían consultar. He añadido su gestión desde Android para el rol ADMIN.
+- **Backend:**
+  - `GET /api/centros/{id}/locales/gestion` y `GET /api/locales/gestion/{id}` para consultar los locales de un centro (también los inactivos) con su uso: instalaciones, obligaciones, mantenimientos, ocupaciones vigentes y futuras y mantenimientos abiertos;
+  - `POST /api/centros/{id}/locales` para dar de alta;
+  - `PATCH /api/locales/{id}` para editar;
+  - `PATCH /api/locales/{id}/activo` para desactivar o reactivar.
+  - `GET /api/centros/{id}/locales` sigue igual: solo los activos.
+- **Reglas:**
+  - código obligatorio (hasta 40 caracteres), en mayúsculas, único dentro del centro y que no cambia; nombre obligatorio y que puede repetirse; planta y ubicación opcionales;
+  - un local no puede cambiar de centro;
+  - no se puede desactivar un local con ocupaciones vigentes, ocupaciones futuras activas o mantenimientos abiertos; si no los tiene, hay que confirmar viendo un resumen;
+  - desactivar no borra ni cambia nada más; el local inactivo no admite instalaciones, obligaciones ni mantenimientos nuevos (los de zona común no cambian);
+  - en un centro inactivo no se pueden crear ni reactivar locales (sí editarlos o desactivarlos).
+- **Concurrencia:** bloqueo de la fila del centro y después la del local, siempre en ese orden, y huella de los datos. Las altas de instalaciones, obligaciones y mantenimientos de un local también bloquean su fila, así no se cruzan con una desactivación.
+- **Auditoría:** alta, edición, desactivación y reactivación quedan registradas.
+- **Android:** acceso «Gestionar locales» desde la lista de locales de un centro y desde la ficha del centro (EXPLOTACION solo consulta), formulario de alta y edición con el centro como dato fijo y diálogo de desactivación con el resumen.
+- **Limitación:** las obligaciones activas de un local inactivo pueden seguir generando avisos de vencimiento.
+- **Base de datos:** no hay migraciones nuevas; la base principal sigue en V9.
+- **Pruebas:**
+
+  | Batería | Resultado |
+  |---|---|
+  | Unitarias | 193 |
+  | API | 38/38 |
+  | Android | 23/23 |
+  | API con ciclo completo | 66/66 |
+  | Regresión Android | 26/26 |
+  | Preparación de la demo | 14/14 |

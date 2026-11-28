@@ -26,4 +26,7 @@ public interface InstalacionRepository extends JpaRepository<Instalacion, Long> 
 
     // FH-013 / RF-03: uso de un centro (resumen antes de desactivar).
     long countByCentroId(Long centroId);
+
+    // FH-014 / RF-04: uso de un local (resumen antes de desactivar).
+    long countByLocalId(Long localId);
 }

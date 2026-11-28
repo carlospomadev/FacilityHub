@@ -104,9 +104,17 @@ class FacilityViewModel(application: Application) : AndroidViewModel(application
     var guardandoCentro by mutableStateOf(false); private set
     var errorCentro by mutableStateOf<ErrorGestionCentro?>(null); private set
     var avisoCentro by mutableStateOf<String?>(null); private set
+    // FH-014 / RF-04: gestion de locales de un centro (activos e inactivos; consulta: gestion; escritura: solo ADMIN).
+    var catalogoLocales by mutableStateOf<List<LocalGestionDto>>(emptyList()); private set
+    val lecCatalogoLocales = Lectura()
+    var localEditado by mutableStateOf<LocalGestionDto?>(null); private set
+    val lecLocalEditado = Lectura()
+    var guardandoLocal by mutableStateOf(false); private set
+    var errorLocal by mutableStateOf<ErrorGestionLocal?>(null); private set
+    var avisoLocal by mutableStateOf<String?>(null); private set
     private val lecturas = listOf(lecCentros, lecLocales, lecLocal, lecMantenimientos, lecDocumentos, lecTrabajos, lecTrabajo,
         lecInstalacionesCentro, lecTipos, lecObligacionesCentro, lecCatalogoTipos, lecTipoEditado, lecCatalogoCentros,
-        lecCentroEditado)
+        lecCentroEditado, lecCatalogoLocales, lecLocalEditado)
     private val caducar: () -> Unit = { if (loggedIn) sesionCaducada = true }
 
     // FH-009 / R2: true cuando el ultimo intento de login fallo por credenciales (los campos se marcan en error).
@@ -376,6 +384,60 @@ class FacilityViewModel(application: Application) : AndroidViewModel(application
     fun limpiarErrorCentro() { errorCentro = null }
     fun consumirAvisoCentro() { avisoCentro = null }
 
+    // ---------- FH-014 / RF-04: gestion de locales ----------
+
+    fun cargarCatalogoLocales(centroId: Long, forzar: Boolean = false) {
+        if (!puedeGestionar) return
+        if (!forzar && !lecCatalogoLocales.necesitaRecarga(centroId)) return
+        lecCatalogoLocales.lanzar(sesion.scope, centroId, { catalogoLocales = emptyList() },
+            { repository.catalogoLocales(centroId) }, { catalogoLocales = it }, caducar)
+    }
+
+    /** Siempre pide el local al backend: la huella y el uso deben ser los actuales al abrir (o actualizar) la ficha. */
+    fun cargarLocalEditado(id: Long) {
+        if (!puedeGestionar) return
+        lecLocalEditado.lanzar(sesion.scope, id, { localEditado = null }, { repository.localGestion(id) },
+            { localEditado = it }, caducar)
+    }
+
+    fun crearLocal(centroId: Long, peticion: CrearLocalRequest, onHecho: (LocalGestionDto) -> Unit) =
+        escrituraLocal({ repository.crearLocal(centroId, peticion) }, { "Local «${it.codigo}» registrado." }, onHecho)
+
+    fun editarLocal(id: Long, peticion: EditarLocalRequest, onHecho: (LocalGestionDto) -> Unit) =
+        escrituraLocal({ repository.editarLocal(id, peticion) }, { "Local «${it.codigo}» actualizado." }, onHecho)
+
+    fun cambiarActivoLocal(id: Long, peticion: CambiarActivoLocalRequest, onHecho: (LocalGestionDto) -> Unit) =
+        escrituraLocal({ repository.cambiarActivoLocal(id, peticion) },
+            { if (it.activo) "Local «${it.codigo}» reactivado."
+              else "Local «${it.codigo}» desactivado. Sus datos se conservan." },
+            onHecho)
+
+    // Mismo patron que los centros: guarda sincrona contra dobles envios y CambiosDatos invalida la gestion y «Locales».
+    private fun escrituraLocal(peticion: suspend () -> LocalGestionDto, aviso: (LocalGestionDto) -> String,
+                               onHecho: (LocalGestionDto) -> Unit) {
+        if (guardandoLocal || !esAdmin) return
+        guardandoLocal = true; errorLocal = null
+        sesion.scope.launch {
+            try {
+                val local = peticion()
+                CambiosDatos.marcar()
+                localEditado = local
+                avisoLocal = aviso(local)
+                onHecho(local)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                errorLocal = errorGestionLocal(e)
+                if (e is HttpException && e.code() == 401 && loggedIn) sesionCaducada = true
+            } finally {
+                guardandoLocal = false
+            }
+        }
+    }
+
+    fun limpiarErrorLocal() { errorLocal = null }
+    fun consumirAvisoLocal() { avisoLocal = null }
+
     fun limpiarErrorTipo() { errorTipo = null }
     fun consumirAvisoTipo() { avisoTipo = null }
     fun consumirAvisoObligacion() { avisoObligacion = null }
@@ -457,6 +519,7 @@ class FacilityViewModel(application: Application) : AndroidViewModel(application
         errorObligacion = null; avisoObligacion = null
         catalogoTipos = emptyList(); tipoEditado = null; guardandoTipo = false; errorTipo = null; avisoTipo = null
         catalogoCentros = emptyList(); centroEditado = null; guardandoCentro = false; errorCentro = null; avisoCentro = null
+        catalogoLocales = emptyList(); localEditado = null; guardandoLocal = false; errorLocal = null; avisoLocal = null
     }
 
     fun clearError() { error = null; credencialesIncorrectas = false }
@@ -676,6 +739,46 @@ internal fun errorGestionCentro(http: Int, cuerpo: String): ErrorGestionCentro {
                 "El código debe tener entre 2 y 30 caracteres: letras, números y guiones, sin espacios.", CampoCentro.CODIGO)
             http == 400 -> ErrorGestionCentro("Datos no válidos. Revisa los campos marcados.")
             else -> ErrorGestionCentro("No se pudo guardar: la operación entra en conflicto con los datos actuales. Recarga los datos.")
+        }
+    }
+}
+
+/** FH-014: campo del formulario de locales al que se liga un rechazo (null = mensaje general). */
+enum class CampoLocal { CODIGO, NOMBRE }
+/** [codigo] = codigo estable del 409 del backend (LOCAL_EN_USO, CENTRO_INACTIVO, DATOS_DESACTUALIZADOS...). */
+data class ErrorGestionLocal(val mensaje: String, val campo: CampoLocal? = null, val codigo: String? = null)
+
+// FH-014: traduce los rechazos de la gestion de locales. El cuerpo de error solo se lee una vez.
+internal fun errorGestionLocal(e: Exception): ErrorGestionLocal {
+    if (e !is HttpException || e.code() !in setOf(400, 404, 409)) return ErrorGestionLocal(mensajeError(e))
+    val cuerpo = try { e.response()?.errorBody()?.string().orEmpty() } catch (_: Exception) { "" }
+    return errorGestionLocal(e.code(), cuerpo)
+}
+
+internal fun errorGestionLocal(http: Int, cuerpo: String): ErrorGestionLocal {
+    val detalle = campoTextoJson(cuerpo, "detail").orEmpty()
+    val codigo = campoTextoJson(cuerpo, "codigo")
+    return when (codigo) {
+        "CODIGO_DUPLICADO" -> ErrorGestionLocal("Ya existe un local con ese código en este centro.", CampoLocal.CODIGO, codigo)
+        "DATOS_DESACTUALIZADOS" -> ErrorGestionLocal(
+            "Este local ha sido modificado por otro usuario. Actualiza los datos antes de guardar.", null, codigo)
+        "CENTRO_INACTIVO" -> ErrorGestionLocal(
+            if (detalle.contains("reactivar")) "No se puede reactivar: el centro del local está inactivo."
+            else "El centro está inactivo y no admite locales nuevos.", null, codigo)
+        "LOCAL_EN_USO" -> ErrorGestionLocal(
+            "No se puede desactivar: el local tiene ${campoNumeroJson(cuerpo, "ocupacionesVigentes") ?: 0} ocupaciones vigentes, " +
+                "${campoNumeroJson(cuerpo, "ocupacionesFuturas") ?: 0} ocupaciones futuras y " +
+                "${campoNumeroJson(cuerpo, "mantenimientosAbiertos") ?: 0} mantenimientos abiertos. Deben cerrarse antes.",
+            null, codigo)
+        "IMPACTO_NO_CONFIRMADO" -> ErrorGestionLocal("Confirma la desactivación para continuar.", null, codigo)
+        else -> when {
+            http == 404 -> ErrorGestionLocal("El local o el centro ya no existe. Vuelve atrás y recarga la lista.")
+            detalle.contains("codigo de un local") -> ErrorGestionLocal("El código no se puede modificar.", CampoLocal.CODIGO)
+            detalle.contains("centro de un local") -> ErrorGestionLocal("El centro de un local no se puede modificar.")
+            detalle.startsWith("El codigo es obligatorio") -> ErrorGestionLocal(
+                "Indica un código de hasta 40 caracteres.", CampoLocal.CODIGO)
+            http == 400 -> ErrorGestionLocal("Datos no válidos. Revisa los campos marcados.")
+            else -> ErrorGestionLocal("No se pudo guardar: la operación entra en conflicto con los datos actuales. Recarga los datos.")
         }
     }
 }

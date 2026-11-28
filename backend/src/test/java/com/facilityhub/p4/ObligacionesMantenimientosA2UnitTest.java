@@ -87,7 +87,9 @@ class ObligacionesMantenimientosA2UnitTest {
         when(centroActivo.isActivo()).thenReturn(true);
         when(centroRepository.findParaAlta(any())).thenReturn(Optional.of(centroActivo));
         mantenimientoService = new MantenimientoService(mantenimientoRepository, obligacionRepository, autorizacion,
-            mock(IntervencionRepository.class), centroRepository);
+            mock(IntervencionRepository.class), centroRepository, localRepository);
+        // FH-014 (D10): los locales de estas pruebas estan activos.
+        when(localRepository.bloquearYEstaActivo(any())).thenReturn(true);
 
         // existeOcupacionVigente ya incluye ocupacion activa y vigente, local activo y centro activo (B1).
         when(ocupacionRepository.existeOcupacionVigente(LOCAL_PROPIO, INQUILINO_ID, HOY)).thenReturn(true);

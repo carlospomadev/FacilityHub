@@ -72,6 +72,22 @@ interface FacilityApi {
     @PATCH("api/centros/{id}/activo")
     suspend fun cambiarActivoCentro(@Path("id") id: Long, @Body body: CambiarActivoCentroRequest): CentroGestionDto
 
+    // FH-014 / RF-04: gestion de locales (consulta: gestion; escritura: ADMIN).
+    @GET("api/centros/{id}/locales/gestion")
+    suspend fun catalogoLocales(@Path("id") centroId: Long): List<LocalGestionDto>
+
+    @GET("api/locales/gestion/{id}")
+    suspend fun localGestion(@Path("id") id: Long): LocalGestionDto
+
+    @POST("api/centros/{id}/locales")
+    suspend fun crearLocal(@Path("id") centroId: Long, @Body body: CrearLocalRequest): LocalGestionDto
+
+    @PATCH("api/locales/{id}")
+    suspend fun editarLocal(@Path("id") id: Long, @Body body: EditarLocalRequest): LocalGestionDto
+
+    @PATCH("api/locales/{id}/activo")
+    suspend fun cambiarActivoLocal(@Path("id") id: Long, @Body body: CambiarActivoLocalRequest): LocalGestionDto
+
     @GET("api/centros/{id}/obligaciones")
     suspend fun obligacionesCentro(@Path("id") centroId: Long): List<ObligacionCentroDto>
 

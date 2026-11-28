@@ -138,6 +138,13 @@ public class SecurityConfig {
                     .hasRole("ADMIN")
                 .requestMatchers(HttpMethod.PATCH, "/api/centros/*", "/api/centros/*/activo")
                     .hasRole("ADMIN")
+                // FH-014 / RF-04 (D1): gestion de locales. Antes del GET general de centros y locales, que admite INQUILINO.
+                .requestMatchers(HttpMethod.GET, "/api/centros/*/locales/gestion", "/api/locales/gestion/*")
+                    .hasAnyRole("ADMIN", "EXPLOTACION")
+                .requestMatchers(HttpMethod.POST, "/api/centros/*/locales")
+                    .hasRole("ADMIN")
+                .requestMatchers(HttpMethod.PATCH, "/api/locales/*", "/api/locales/*/activo")
+                    .hasRole("ADMIN")
                 .requestMatchers(HttpMethod.GET, "/api/centros/**", "/api/locales/**", "/api/obligaciones/**")
                     .hasAnyRole("ADMIN", "EXPLOTACION", "INQUILINO")
                 .requestMatchers(HttpMethod.POST, "/api/obligaciones/**")

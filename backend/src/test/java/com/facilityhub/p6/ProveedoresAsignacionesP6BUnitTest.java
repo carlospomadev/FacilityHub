@@ -88,7 +88,7 @@ class ProveedoresAsignacionesP6BUnitTest {
         trabajoService = new TrabajoProveedorService(asignacionRepository, autorizacion, politica, intervencionRepository);
         obligacionService = new ObligacionService(localRepository, obligacionRepository, ocupacionRepository, autorizacion);
         mantenimientoService = new MantenimientoService(mantenimientoRepository, obligacionRepository, autorizacion, intervencionRepository,
-            mock(com.facilityhub.repository.CentroRepository.class));
+            mock(com.facilityhub.repository.CentroRepository.class), localRepository);
 
         proveedor = proveedor(PROVEEDOR_ID, true);
         proveedorOtro = proveedor(PROVEEDOR_OTRO_ID, true);

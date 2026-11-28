@@ -314,7 +314,8 @@ fun FacilityHubApp(
 
                 composable("centro-editar/{id}", arguments = listOf(navArgument("id") { type = NavType.LongType })) { entry ->
                     CentroFormScreen(vm = vm, centroId = entry.arguments!!.getLong("id"),
-                        onCancelar = { nav.popBackStack() }, onGuardado = { nav.popBackStack() })
+                        onCancelar = { nav.popBackStack() }, onGuardado = { nav.popBackStack() },
+                        onLocales = { c -> nav.navigate("locales-gestion/${c.id}/${enc(c.nombre)}") })
                 }
 
                 composable("declaraciones") {
@@ -446,10 +447,46 @@ private fun NavGraphBuilder.rutasCentro(nav: NavHostController, vm: FacilityView
 
             onInstalaciones = { nav.navigate("instalaciones-centro/$centroId/${enc(nombre)}") },
 
+            onGestionar = { nav.navigate("locales-gestion/$centroId/${enc(nombre)}") },
+
             onBack = {
                 nav.popBackStack()
             }
         )
+    }
+
+    // FH-014 / RF-04: gestion de los locales de un centro y su formulario (alta, edicion y activacion solo ADMIN).
+    composable(
+        route = "locales-gestion/{centroId}/{nombre}",
+        arguments = listOf(navArgument("centroId") { type = NavType.LongType }, navArgument("nombre") { type = NavType.StringType })
+    ) { entry ->
+        val centroId = entry.arguments!!.getLong("centroId")
+        val nombre = dec(entry.arguments!!.getString("nombre")!!)
+        LocalesGestionScreen(
+            vm = vm, centroId = centroId, centroNombre = nombre,
+            onNuevo = { nav.navigate("local-nuevo/$centroId/${enc(nombre)}") },
+            onLocal = { l -> nav.navigate("local-editar/${l.id}/$centroId/${enc(nombre)}") },
+            onBack = { nav.popBackStack() }
+        )
+    }
+
+    composable(
+        route = "local-nuevo/{centroId}/{nombre}",
+        arguments = listOf(navArgument("centroId") { type = NavType.LongType }, navArgument("nombre") { type = NavType.StringType })
+    ) { entry ->
+        LocalFormScreen(vm = vm, centroId = entry.arguments!!.getLong("centroId"),
+            centroNombre = dec(entry.arguments!!.getString("nombre")!!), localId = null,
+            onCancelar = { nav.popBackStack() }, onGuardado = { nav.popBackStack() })
+    }
+
+    composable(
+        route = "local-editar/{localId}/{centroId}/{nombre}",
+        arguments = listOf(navArgument("localId") { type = NavType.LongType }, navArgument("centroId") { type = NavType.LongType },
+            navArgument("nombre") { type = NavType.StringType })
+    ) { entry ->
+        LocalFormScreen(vm = vm, centroId = entry.arguments!!.getLong("centroId"),
+            centroNombre = dec(entry.arguments!!.getString("nombre")!!), localId = entry.arguments!!.getLong("localId"),
+            onCancelar = { nav.popBackStack() }, onGuardado = { nav.popBackStack() })
     }
 
     // FH-010A / RF-07: instalaciones del centro y alta (zona comun o local). localId = -1 -> zona comun.
