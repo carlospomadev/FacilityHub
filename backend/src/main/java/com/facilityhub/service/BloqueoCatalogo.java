@@ -19,10 +19,22 @@ public class BloqueoCatalogo {
     @PersistenceContext
     private EntityManager entityManager;
 
+    // FH-013 / RF-03 (D3 y D7): clave propia para el catalogo de centros (independiente de la de tipos).
+    static final long CLAVE_CATALOGO_CENTROS = 8_013_001L;
+
     /** Debe llamarse dentro de una transaccion de escritura; espera si otra transaccion tiene el bloqueo. */
     public void bloquear() {
+        bloquear(CLAVE_CATALOGO_TIPOS);
+    }
+
+    /** FH-013: escrituras del catalogo de centros. Mismo orden fijo: 1) este bloqueo, 2) la fila del centro. */
+    public void bloquearCentros() {
+        bloquear(CLAVE_CATALOGO_CENTROS);
+    }
+
+    private void bloquear(long clave) {
         entityManager.createNativeQuery("SELECT 1 FROM (SELECT pg_advisory_xact_lock(:clave)) b")
-            .setParameter("clave", CLAVE_CATALOGO_TIPOS)
+            .setParameter("clave", clave)
             .getSingleResult();
     }
 }

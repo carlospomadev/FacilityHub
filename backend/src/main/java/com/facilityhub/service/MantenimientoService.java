@@ -9,6 +9,7 @@ import com.facilityhub.domain.Mantenimiento;
 import com.facilityhub.domain.ObligacionMantenimiento;
 import com.facilityhub.domain.Usuario;
 import com.facilityhub.domain.EstadoValidacion;
+import com.facilityhub.repository.CentroRepository;
 import com.facilityhub.repository.IntervencionRepository;
 import com.facilityhub.repository.MantenimientoRepository;
 import com.facilityhub.repository.ObligacionMantenimientoRepository;
@@ -25,15 +26,18 @@ public class MantenimientoService {
     private final ObligacionMantenimientoRepository obligacionRepository;
     private final DocumentoAutorizacionService autorizacion;
     private final IntervencionRepository intervencionRepository;
+    private final CentroRepository centroRepository;
 
     public MantenimientoService(MantenimientoRepository mantenimientoRepository,
                                 ObligacionMantenimientoRepository obligacionRepository,
                                 DocumentoAutorizacionService autorizacion,
-                                IntervencionRepository intervencionRepository) {
+                                IntervencionRepository intervencionRepository,
+                                CentroRepository centroRepository) {
         this.mantenimientoRepository = mantenimientoRepository;
         this.obligacionRepository = obligacionRepository;
         this.autorizacion = autorizacion;
         this.intervencionRepository = intervencionRepository;
+        this.centroRepository = centroRepository;
     }
 
     // FH-005A2-C: gestion -> MantenimientoDto completo (comportamiento previo). INQUILINO -> solo si la obligacion
@@ -70,6 +74,13 @@ public class MantenimientoService {
         autorizacion.exigirGestion(autorizacion.usuarioActual(email));
         ObligacionMantenimiento obligacion = obligacionRepository.findById(obligacionId)
             .orElseThrow(() -> new RecursoNoEncontradoException("Obligacion no encontrada: " + obligacionId));
+        // FH-013 / RF-03 (D6): un centro inactivo no admite trabajo pendiente nuevo. Se bloquea la fila del centro (el
+        // mismo bloqueo que toma la desactivacion antes de contar), asi no hay carrera entre alta y desactivacion.
+        Long centroId = obligacion.getCentro().getId();
+        boolean centroActivo = centroRepository.findParaAlta(centroId).map(c -> c.isActivo()).orElse(false);
+        if (!centroActivo) {
+            throw new ConflictoException("El centro esta inactivo: no admite mantenimientos nuevos");
+        }
         Mantenimiento mantenimiento = new Mantenimiento(obligacion, request.fechaProgramada(), request.descripcion());
         return toDto(mantenimientoRepository.save(mantenimiento));
     }

@@ -52,4 +52,7 @@ public interface ObligacionMantenimientoRepository extends JpaRepository<Obligac
 
     @Query("select o.tipoMantenimiento.id, count(o) from ObligacionMantenimiento o where o.activo = true group by o.tipoMantenimiento.id")
     List<Object[]> contarActivasPorTipo();
+
+    // FH-013 / RF-03: uso de un centro (resumen antes de desactivar).
+    long countByCentroIdAndActivoTrue(Long centroId);
 }
