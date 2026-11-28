@@ -262,6 +262,8 @@ fun LocalesScreen(
     centroNombre: String,
     onLocal: (LocalDto) -> Unit,
     onInstalaciones: () -> Unit = {},
+    // FH-014 / RF-04 (D8): gestion de locales del centro (ADMIN gestiona; EXPLOTACION consulta).
+    onGestionar: () -> Unit = {},
     onBack: () -> Unit
 ) {
     LaunchedEffect(centroId) {
@@ -281,6 +283,11 @@ fun LocalesScreen(
                 Icon(FhIcons.Herramienta, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(FhEspacio.s))
                 Text("Instalaciones del centro")
+            }
+            OutlinedButton(onClick = onGestionar, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+                Icon(FhIcons.Editar, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(FhEspacio.s))
+                Text("Gestionar locales")
             }
             Spacer(Modifier.height(FhEspacio.m))
         }
