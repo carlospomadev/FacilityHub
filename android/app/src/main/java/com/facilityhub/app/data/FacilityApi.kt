@@ -88,6 +88,22 @@ interface FacilityApi {
     @PATCH("api/locales/{id}/activo")
     suspend fun cambiarActivoLocal(@Path("id") id: Long, @Body body: CambiarActivoLocalRequest): LocalGestionDto
 
+    // FH-015 / RF-05: gestion de inquilinos (consulta: gestion; escritura: ADMIN).
+    @GET("api/inquilinos/gestion")
+    suspend fun catalogoInquilinos(): List<InquilinoGestionDto>
+
+    @GET("api/inquilinos/gestion/{id}")
+    suspend fun inquilinoGestion(@Path("id") id: Long): InquilinoGestionDto
+
+    @POST("api/inquilinos")
+    suspend fun crearInquilino(@Body body: CrearInquilinoRequest): InquilinoGestionDto
+
+    @PATCH("api/inquilinos/{id}")
+    suspend fun editarInquilino(@Path("id") id: Long, @Body body: EditarInquilinoRequest): InquilinoGestionDto
+
+    @PATCH("api/inquilinos/{id}/activo")
+    suspend fun cambiarActivoInquilino(@Path("id") id: Long, @Body body: CambiarActivoInquilinoRequest): InquilinoGestionDto
+
     @GET("api/centros/{id}/obligaciones")
     suspend fun obligacionesCentro(@Path("id") centroId: Long): List<ObligacionCentroDto>
 

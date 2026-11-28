@@ -112,9 +112,17 @@ class FacilityViewModel(application: Application) : AndroidViewModel(application
     var guardandoLocal by mutableStateOf(false); private set
     var errorLocal by mutableStateOf<ErrorGestionLocal?>(null); private set
     var avisoLocal by mutableStateOf<String?>(null); private set
+    // FH-015 / RF-05: gestion de inquilinos (activos e inactivos; consulta: gestion; escritura: solo ADMIN).
+    var catalogoInquilinos by mutableStateOf<List<InquilinoGestionDto>>(emptyList()); private set
+    val lecCatalogoInquilinos = Lectura()
+    var inquilinoEditado by mutableStateOf<InquilinoGestionDto?>(null); private set
+    val lecInquilinoEditado = Lectura()
+    var guardandoInquilino by mutableStateOf(false); private set
+    var errorInquilino by mutableStateOf<ErrorGestionInquilino?>(null); private set
+    var avisoInquilino by mutableStateOf<String?>(null); private set
     private val lecturas = listOf(lecCentros, lecLocales, lecLocal, lecMantenimientos, lecDocumentos, lecTrabajos, lecTrabajo,
         lecInstalacionesCentro, lecTipos, lecObligacionesCentro, lecCatalogoTipos, lecTipoEditado, lecCatalogoCentros,
-        lecCentroEditado, lecCatalogoLocales, lecLocalEditado)
+        lecCentroEditado, lecCatalogoLocales, lecLocalEditado, lecCatalogoInquilinos, lecInquilinoEditado)
     private val caducar: () -> Unit = { if (loggedIn) sesionCaducada = true }
 
     // FH-009 / R2: true cuando el ultimo intento de login fallo por credenciales (los campos se marcan en error).
@@ -438,6 +446,60 @@ class FacilityViewModel(application: Application) : AndroidViewModel(application
     fun limpiarErrorLocal() { errorLocal = null }
     fun consumirAvisoLocal() { avisoLocal = null }
 
+    // ---------- FH-015 / RF-05: gestion de inquilinos ----------
+
+    fun cargarCatalogoInquilinos(forzar: Boolean = false) {
+        if (!puedeGestionar) return
+        if (!forzar && !lecCatalogoInquilinos.necesitaRecarga("catalogo")) return
+        lecCatalogoInquilinos.lanzar(sesion.scope, "catalogo", { catalogoInquilinos = emptyList() },
+            { repository.catalogoInquilinos() }, { catalogoInquilinos = it }, caducar)
+    }
+
+    /** Siempre pide el inquilino al backend: la huella y el uso deben ser los actuales al abrir (o actualizar) la ficha. */
+    fun cargarInquilinoEditado(id: Long) {
+        if (!puedeGestionar) return
+        lecInquilinoEditado.lanzar(sesion.scope, id, { inquilinoEditado = null }, { repository.inquilinoGestion(id) },
+            { inquilinoEditado = it }, caducar)
+    }
+
+    fun crearInquilino(peticion: CrearInquilinoRequest, onHecho: (InquilinoGestionDto) -> Unit) =
+        escrituraInquilino({ repository.crearInquilino(peticion) }, { "Inquilino «${it.razonSocial}» registrado." }, onHecho)
+
+    fun editarInquilino(id: Long, peticion: EditarInquilinoRequest, onHecho: (InquilinoGestionDto) -> Unit) =
+        escrituraInquilino({ repository.editarInquilino(id, peticion) }, { "Inquilino «${it.razonSocial}» actualizado." }, onHecho)
+
+    fun cambiarActivoInquilino(id: Long, peticion: CambiarActivoInquilinoRequest, onHecho: (InquilinoGestionDto) -> Unit) =
+        escrituraInquilino({ repository.cambiarActivoInquilino(id, peticion) },
+            { if (it.activo) "Inquilino «${it.razonSocial}» reactivado."
+              else "Inquilino «${it.razonSocial}» desactivado. Sus datos se conservan." },
+            onHecho)
+
+    // Mismo patron que centros y locales: guarda sincrona contra dobles envios y CambiosDatos invalida las lecturas.
+    private fun escrituraInquilino(peticion: suspend () -> InquilinoGestionDto, aviso: (InquilinoGestionDto) -> String,
+                                   onHecho: (InquilinoGestionDto) -> Unit) {
+        if (guardandoInquilino || !esAdmin) return
+        guardandoInquilino = true; errorInquilino = null
+        sesion.scope.launch {
+            try {
+                val inquilino = peticion()
+                CambiosDatos.marcar()
+                inquilinoEditado = inquilino
+                avisoInquilino = aviso(inquilino)
+                onHecho(inquilino)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                errorInquilino = errorGestionInquilino(e)
+                if (e is HttpException && e.code() == 401 && loggedIn) sesionCaducada = true
+            } finally {
+                guardandoInquilino = false
+            }
+        }
+    }
+
+    fun limpiarErrorInquilino() { errorInquilino = null }
+    fun consumirAvisoInquilino() { avisoInquilino = null }
+
     fun limpiarErrorTipo() { errorTipo = null }
     fun consumirAvisoTipo() { avisoTipo = null }
     fun consumirAvisoObligacion() { avisoObligacion = null }
@@ -520,6 +582,8 @@ class FacilityViewModel(application: Application) : AndroidViewModel(application
         catalogoTipos = emptyList(); tipoEditado = null; guardandoTipo = false; errorTipo = null; avisoTipo = null
         catalogoCentros = emptyList(); centroEditado = null; guardandoCentro = false; errorCentro = null; avisoCentro = null
         catalogoLocales = emptyList(); localEditado = null; guardandoLocal = false; errorLocal = null; avisoLocal = null
+        catalogoInquilinos = emptyList(); inquilinoEditado = null; guardandoInquilino = false; errorInquilino = null
+        avisoInquilino = null
     }
 
     fun clearError() { error = null; credencialesIncorrectas = false }
@@ -779,6 +843,42 @@ internal fun errorGestionLocal(http: Int, cuerpo: String): ErrorGestionLocal {
                 "Indica un código de hasta 40 caracteres.", CampoLocal.CODIGO)
             http == 400 -> ErrorGestionLocal("Datos no válidos. Revisa los campos marcados.")
             else -> ErrorGestionLocal("No se pudo guardar: la operación entra en conflicto con los datos actuales. Recarga los datos.")
+        }
+    }
+}
+
+/** FH-015: campo del formulario de inquilinos al que se liga un rechazo (null = mensaje general). */
+enum class CampoInquilino { CIF, RAZON_SOCIAL, EMAIL, TELEFONO }
+/** [codigo] = codigo estable del 409 del backend (INQUILINO_EN_USO, CIF_DUPLICADO, DATOS_DESACTUALIZADOS...). */
+data class ErrorGestionInquilino(val mensaje: String, val campo: CampoInquilino? = null, val codigo: String? = null)
+
+// FH-015: traduce los rechazos de la gestion de inquilinos. El cuerpo de error solo se lee una vez.
+internal fun errorGestionInquilino(e: Exception): ErrorGestionInquilino {
+    if (e !is HttpException || e.code() !in setOf(400, 404, 409)) return ErrorGestionInquilino(mensajeError(e))
+    val cuerpo = try { e.response()?.errorBody()?.string().orEmpty() } catch (_: Exception) { "" }
+    return errorGestionInquilino(e.code(), cuerpo)
+}
+
+internal fun errorGestionInquilino(http: Int, cuerpo: String): ErrorGestionInquilino {
+    val detalle = campoTextoJson(cuerpo, "detail").orEmpty()
+    val codigo = campoTextoJson(cuerpo, "codigo")
+    return when (codigo) {
+        "CIF_DUPLICADO" -> ErrorGestionInquilino("Ya existe un inquilino con ese CIF/NIF.", CampoInquilino.CIF, codigo)
+        "DATOS_DESACTUALIZADOS" -> ErrorGestionInquilino(
+            "Este inquilino ha sido modificado por otro usuario. Actualiza los datos antes de guardar.", null, codigo)
+        "INQUILINO_EN_USO" -> ErrorGestionInquilino(
+            "No se puede desactivar: el inquilino tiene ${campoNumeroJson(cuerpo, "ocupacionesVigentes") ?: 0} ocupaciones " +
+                "vigentes, ${campoNumeroJson(cuerpo, "ocupacionesFuturas") ?: 0} ocupaciones futuras y " +
+                "${campoNumeroJson(cuerpo, "mantenimientosAbiertos") ?: 0} mantenimientos abiertos. Deben terminar antes.",
+            null, codigo)
+        "IMPACTO_NO_CONFIRMADO" -> ErrorGestionInquilino("Confirma la desactivación para continuar.", null, codigo)
+        else -> when {
+            http == 404 -> ErrorGestionInquilino("El inquilino ya no existe. Vuelve atrás y recarga la lista.")
+            detalle.contains("CIF de un inquilino") -> ErrorGestionInquilino("El CIF/NIF no se puede modificar.", CampoInquilino.CIF)
+            detalle.startsWith("El CIF/NIF es obligatorio") -> ErrorGestionInquilino(
+                "Indica un CIF/NIF de 5 a 20 letras o dígitos.", CampoInquilino.CIF)
+            http == 400 -> ErrorGestionInquilino("Datos no válidos. Revisa los campos marcados.")
+            else -> ErrorGestionInquilino("No se pudo guardar: la operación entra en conflicto con los datos actuales. Recarga los datos.")
         }
     }
 }
