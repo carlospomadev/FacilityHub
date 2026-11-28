@@ -11,6 +11,7 @@ import com.facilityhub.domain.Usuario;
 import com.facilityhub.domain.EstadoValidacion;
 import com.facilityhub.repository.CentroRepository;
 import com.facilityhub.repository.IntervencionRepository;
+import com.facilityhub.repository.LocalComercialRepository;
 import com.facilityhub.repository.MantenimientoRepository;
 import com.facilityhub.repository.ObligacionMantenimientoRepository;
 import java.util.EnumSet;
@@ -27,17 +28,20 @@ public class MantenimientoService {
     private final DocumentoAutorizacionService autorizacion;
     private final IntervencionRepository intervencionRepository;
     private final CentroRepository centroRepository;
+    private final LocalComercialRepository localRepository;
 
     public MantenimientoService(MantenimientoRepository mantenimientoRepository,
                                 ObligacionMantenimientoRepository obligacionRepository,
                                 DocumentoAutorizacionService autorizacion,
                                 IntervencionRepository intervencionRepository,
-                                CentroRepository centroRepository) {
+                                CentroRepository centroRepository,
+                                LocalComercialRepository localRepository) {
         this.mantenimientoRepository = mantenimientoRepository;
         this.obligacionRepository = obligacionRepository;
         this.autorizacion = autorizacion;
         this.intervencionRepository = intervencionRepository;
         this.centroRepository = centroRepository;
+        this.localRepository = localRepository;
     }
 
     // FH-005A2-C: gestion -> MantenimientoDto completo (comportamiento previo). INQUILINO -> solo si la obligacion
@@ -80,6 +84,11 @@ public class MantenimientoService {
         boolean centroActivo = centroRepository.findParaAlta(centroId).map(c -> c.isActivo()).orElse(false);
         if (!centroActivo) {
             throw new ConflictoException("El centro esta inactivo: no admite mantenimientos nuevos");
+        }
+        // FH-014 / RF-04 (D10): tampoco un local inactivo (la obligacion puede venir de una instalacion del local). Fila
+        // del local bloqueada despues de la del centro (D7). Zona comun (sin local): sin cambios.
+        if (obligacion.getLocal() != null && !localRepository.bloquearYEstaActivo(obligacion.getLocal().getId())) {
+            throw new ConflictoException("El local esta inactivo: no admite mantenimientos nuevos");
         }
         Mantenimiento mantenimiento = new Mantenimiento(obligacion, request.fechaProgramada(), request.descripcion());
         return toDto(mantenimientoRepository.save(mantenimiento));

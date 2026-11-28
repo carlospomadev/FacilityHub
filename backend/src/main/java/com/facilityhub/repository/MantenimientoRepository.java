@@ -80,4 +80,25 @@ public interface MantenimientoRepository extends JpaRepository<Mantenimiento, Lo
                                                      com.facilityhub.domain.EstadoValidacion.REQUIERE_CORRECCION)))
         """)
     long contarAbiertosDelCentro(@Param("centroId") Long centroId);
+
+    // FH-014 / RF-04 (D4): la misma definicion de mantenimiento abierto, para las obligaciones de un local.
+    @Query("""
+        select count(m) from Mantenimiento m
+        where m.obligacion.local.id = :localId
+          and m.estado <> com.facilityhub.domain.EstadoMantenimiento.CANCELADO
+          and not exists (select 1 from Intervencion a where a.mantenimiento = m
+                          and a.estadoValidacion = com.facilityhub.domain.EstadoValidacion.APROBADO)
+          and (m.estado in (com.facilityhub.domain.EstadoMantenimiento.PROGRAMADO,
+                            com.facilityhub.domain.EstadoMantenimiento.PENDIENTE,
+                            com.facilityhub.domain.EstadoMantenimiento.EN_PROCESO)
+               or exists (select 1 from Intervencion i where i.mantenimiento = m
+                          and i.estadoValidacion in (com.facilityhub.domain.EstadoValidacion.BORRADOR,
+                                                     com.facilityhub.domain.EstadoValidacion.PENDIENTE_VALIDACION,
+                                                     com.facilityhub.domain.EstadoValidacion.REQUIERE_CORRECCION)))
+        """)
+    long contarAbiertosDelLocal(@Param("localId") Long localId);
+
+    // FH-014 / RF-04: todos los mantenimientos del local (historial), solo informativo.
+    @Query("select count(m) from Mantenimiento m where m.obligacion.local.id = :localId")
+    long contarDelLocal(@Param("localId") Long localId);
 }

@@ -10,9 +10,12 @@ import com.facilityhub.api.dto.centro.CambiarActivoCentroRequest;
 import com.facilityhub.api.dto.centro.CentroGestionDto;
 import com.facilityhub.api.dto.centro.CrearCentroRequest;
 import com.facilityhub.api.dto.centro.EditarCentroRequest;
+import com.facilityhub.api.dto.local.CrearLocalRequest;
+import com.facilityhub.api.dto.local.LocalGestionDto;
 import com.facilityhub.service.CentroGestionService;
 import com.facilityhub.service.CentroService;
 import com.facilityhub.service.InstalacionService;
+import com.facilityhub.service.LocalGestionService;
 import com.facilityhub.service.ObligacionAltaService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -29,13 +32,16 @@ public class CentroController {
     private final InstalacionService instalacionService;
     private final ObligacionAltaService obligacionAltaService;
     private final CentroGestionService centroGestionService;
+    private final LocalGestionService localGestionService;
 
     public CentroController(CentroService centroService, InstalacionService instalacionService,
-                            ObligacionAltaService obligacionAltaService, CentroGestionService centroGestionService) {
+                            ObligacionAltaService obligacionAltaService, CentroGestionService centroGestionService,
+                            LocalGestionService localGestionService) {
         this.centroService = centroService;
         this.instalacionService = instalacionService;
         this.obligacionAltaService = obligacionAltaService;
         this.centroGestionService = centroGestionService;
+        this.localGestionService = localGestionService;
     }
 
     // FH-013 / RF-03 (D1, D8): gestion de centros. Consulta (activos e inactivos) para ADMIN y EXPLOTACION.
@@ -81,6 +87,20 @@ public class CentroController {
     @GetMapping("/{id}/locales")
     public List<LocalDto> listarLocales(@PathVariable Long id, Principal principal) {
         return centroService.listarLocales(id, email(principal));
+    }
+
+    // FH-014 / RF-04 (D1): locales del centro para la gestion (activos e inactivos), ADMIN y EXPLOTACION.
+    @GetMapping("/{id}/locales/gestion")
+    public List<LocalGestionDto> listarLocalesGestion(@PathVariable Long id, Principal principal) {
+        return localGestionService.listar(id, email(principal));
+    }
+
+    // FH-014 / RF-04: alta de un local en el centro de la ruta, solo ADMIN. 201 con el local persistido.
+    @PostMapping("/{id}/locales")
+    @ResponseStatus(HttpStatus.CREATED)
+    public LocalGestionDto crearLocal(@PathVariable Long id, @Valid @RequestBody CrearLocalRequest request,
+                                      Principal principal) {
+        return localGestionService.crear(id, request, email(principal));
     }
 
     // FH-010A / RF-07: instalaciones del centro (zona comun y locales), solo gestion.

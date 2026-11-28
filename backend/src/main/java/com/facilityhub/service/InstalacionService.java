@@ -68,7 +68,8 @@ public class InstalacionService {
             if (!local.getCentro().getId().equals(centro.getId())) {
                 throw new IllegalArgumentException("El local no pertenece al centro indicado");
             }
-            if (!local.isActivo()) {
+            // FH-014 / RF-04 (D7): bloqueo de la fila del local (despues del centro) frente a una desactivacion simultanea.
+            if (!localRepository.bloquearYEstaActivo(local.getId())) {
                 throw new ConflictoException("El local esta inactivo");
             }
         }

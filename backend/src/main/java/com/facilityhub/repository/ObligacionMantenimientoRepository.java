@@ -55,4 +55,7 @@ public interface ObligacionMantenimientoRepository extends JpaRepository<Obligac
 
     // FH-013 / RF-03: uso de un centro (resumen antes de desactivar).
     long countByCentroIdAndActivoTrue(Long centroId);
+
+    // FH-014 / RF-04: uso de un local (resumen antes de desactivar).
+    long countByLocalIdAndActivoTrue(Long localId);
 }
