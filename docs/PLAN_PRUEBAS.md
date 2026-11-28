@@ -59,6 +59,7 @@ $env:FACILITYHUB_ADMIN_PASSWORD = "<contraseña de admin@facilityhub.local>"
    - Centros → Locales → **Instalaciones del centro** → alta de una instalación o una obligación de zona común;
    - Centros → **Tipos de mantenimiento**: EXPLOTACION solo consulta; con ADMIN, alta, edición (aviso de impacto si el tipo está en uso) y desactivación;
    - Centros → Locales → **Gestionar locales**: EXPLOTACION solo consulta (también los inactivos); con ADMIN, alta (código único en el centro), edición, desactivación con resumen (bloqueada si el local está ocupado, tiene una ocupación futura o un mantenimiento abierto) y reactivación;
+   - Centros → **Gestionar inquilinos**: EXPLOTACION solo consulta (también los inactivos); con ADMIN, alta (CIF único), edición (el CIF no cambia), desactivación con resumen (bloqueada si tiene ocupaciones vigentes o futuras o mantenimientos abiertos a su cargo) y reactivación;
    - Panel de Explotación con sus filtros;
    - Validaciones → Intervención (Aprobar o Pedir corrección).
 3. **INQUILINO:** Mi local (obligaciones) → Mantenimientos (certificados compartidos) → Historial del local y descarga de un certificado. No ve accesos de alta.
@@ -70,7 +71,7 @@ $env:FACILITYHUB_ADMIN_PASSWORD = "<contraseña de admin@facilityhub.local>"
 - un 401 devuelve al login y los errores de conexión muestran «Reintentar».
 
 ## P-04 Pruebas automatizadas del backend
-- **`mvn test`:** 193 pruebas unitarias sin base de datos. Resultado esperado: `BUILD SUCCESS`.
+- **`mvn test`:** 203 pruebas unitarias sin base de datos. Resultado esperado: `BUILD SUCCESS`.
 - **Pruebas de integración (`*IT`):** solo contra la base de pruebas dedicada y protegida por la barrera `P4Entorno` (ver `backend/README.md`).
 
 ## P-05 Evidencias para la memoria
@@ -95,12 +96,12 @@ Ver [`scripts/demo/README.md`](../scripts/demo/README.md). Todo se ejecuta sobre
 
 Validar y Android modifican datos: después hay que ejecutar `PrepararPresentacion`.
 
-**Últimos resultados comprobados** (28/11/2026, con el código de FH-014):
+**Últimos resultados comprobados** (28/11/2026, con el código de FH-015):
 
 | Prueba | Resultado |
 |---|---|
 | `PrepararPresentacion` | 14/14 |
 | `Validar -ConCicloCompleto` | 66/66 |
 | `Android` | 26/26 |
-| Unitarias del backend | 193/193 |
+| Unitarias del backend | 203/203 |
 | Integración con barrera (`InstalacionesFH010AP6IT`) | 9/9 |

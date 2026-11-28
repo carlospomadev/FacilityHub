@@ -345,3 +345,31 @@ Hasta ahora los locales solo se podían consultar. He añadido su gestión desde
   | API con ciclo completo | 66/66 |
   | Regresión Android | 26/26 |
   | Preparación de la demo | 14/14 |
+
+## 28/11/2026 – Gestión de inquilinos (FH-015, RF-05)
+Hasta ahora los inquilinos solo se cargaban por migración. He añadido su gestión desde Android para el rol ADMIN.
+- **Backend:**
+  - `GET /api/inquilinos/gestion` y `GET /api/inquilinos/gestion/{id}` para consultar los inquilinos (también los inactivos) con su uso: ocupaciones (histórico, vigentes y futuras), mantenimientos abiertos a su cargo, usuarios, solicitudes pendientes y proveedores declarados;
+  - `POST /api/inquilinos` para dar de alta;
+  - `PATCH /api/inquilinos/{id}` para editar;
+  - `PATCH /api/inquilinos/{id}/activo` para desactivar o reactivar.
+  - El área del rol INQUILINO (`/api/inquilino/**`) y `GET /api/locales/{id}/inquilino-actual` siguen igual.
+- **Reglas:**
+  - CIF/NIF obligatorio, de 5 a 20 letras o dígitos, guardado sin espacios, guiones ni puntos y en mayúsculas, único entre todos los inquilinos y que no cambia (un inquilino antiguo sin CIF puede recibirlo una vez); razón social obligatoria y que puede repetirse; nombre comercial, email y teléfono opcionales;
+  - no se puede desactivar un inquilino con ocupaciones vigentes o futuras ni con mantenimientos abiertos vinculados a sus ocupaciones; si no los tiene, hay que confirmar viendo un resumen;
+  - desactivar no borra ni cambia nada más; sus usuarios dejan de acceder al área del inquilino hasta que se reactive.
+- **Concurrencia:** como no hay índice único en el CIF (y no se crean migraciones), las escrituras usan un bloqueo asesor de PostgreSQL y después bloquean la fila del inquilino, con huella de los datos.
+- **Auditoría:** alta, edición, desactivación y reactivación quedan registradas.
+- **Android:** acceso «Gestionar inquilinos» en la pestaña Centros (EXPLOTACION solo consulta), con buscador, formulario de alta y edición con el CIF fijo y diálogo de desactivación con el resumen.
+- **Limitación:** todavía no se puede vincular un inquilino a un local ni crearle usuarios desde la app.
+- **Base de datos:** no hay migraciones nuevas; la base principal sigue en V9.
+- **Pruebas:**
+
+  | Batería | Resultado |
+  |---|---|
+  | Unitarias | 203 |
+  | API | 30/30 |
+  | Android | 22/22 |
+  | API con ciclo completo | 66/66 |
+  | Regresión Android | 26/26 |
+  | Preparación de la demo | 14/14 |

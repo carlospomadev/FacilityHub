@@ -33,4 +33,8 @@ public interface ObligacionProveedorRepository extends JpaRepository<ObligacionP
         order by d.declaradoAt asc, d.id asc
         """)
     List<ObligacionProveedor> bandeja(@Param("estado") EstadoDeclaracionProveedor estado);
+
+    // FH-015 / RF-05: declaraciones activas hechas desde ocupaciones del inquilino (resumen, solo informativo).
+    @Query("select count(d) from ObligacionProveedor d where d.ocupacion.inquilino.id = :inquilinoId and d.activo = true")
+    long contarActivasDelInquilino(@Param("inquilinoId") Long inquilinoId);
 }

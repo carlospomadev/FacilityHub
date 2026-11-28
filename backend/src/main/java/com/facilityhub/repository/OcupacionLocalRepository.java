@@ -131,4 +131,28 @@ public interface OcupacionLocalRepository extends JpaRepository<OcupacionLocal, 
 
     // FH-014 / RF-04: todas las ocupaciones del local (historico incluido), solo informativo.
     long countByLocalId(Long localId);
+
+    // FH-015 / RF-05 (D5): ocupaciones vigentes del inquilino (las definiciones de FH-013 aplicadas al inquilino),
+    // independientemente del estado del local o del centro. Bloquean su desactivacion.
+    @Query("""
+        select count(o) from OcupacionLocal o
+        where o.inquilino.id = :inquilinoId
+          and o.activo = true
+          and o.fechaInicio <= :hoy
+          and (o.fechaFin is null or o.fechaFin >= :hoy)
+        """)
+    long contarVigentesDelInquilino(@Param("inquilinoId") Long inquilinoId, @Param("hoy") LocalDate hoy);
+
+    // FH-015 (D5): ocupaciones futuras activas del inquilino (todavia no iniciadas).
+    @Query("""
+        select count(o) from OcupacionLocal o
+        where o.inquilino.id = :inquilinoId
+          and o.activo = true
+          and o.fechaInicio > :hoy
+          and (o.fechaFin is null or o.fechaFin >= :hoy)
+        """)
+    long contarFuturasDelInquilino(@Param("inquilinoId") Long inquilinoId, @Param("hoy") LocalDate hoy);
+
+    // FH-015: todas las ocupaciones del inquilino (historico incluido), solo informativo.
+    long countByInquilinoId(Long inquilinoId);
 }

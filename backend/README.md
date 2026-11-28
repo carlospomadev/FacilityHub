@@ -112,6 +112,7 @@ Todos requieren `Authorization: Bearer <token>`, salvo el login y `/actuator/hea
 | Catálogo de tipos (RF-08) | `GET /api/tipos-mantenimiento/catalogo` y `GET /api/tipos-mantenimiento/{id}` (activos e inactivos, con su uso y una `huella`); `POST /api/tipos-mantenimiento`; `PATCH /api/tipos-mantenimiento/{id}` (con `huella` y, si hay uso, `confirmarImpacto`); `PATCH /api/tipos-mantenimiento/{id}/activo` | consulta: gestión; escritura: ADMIN |
 | Gestión de centros (RF-03) | `GET /api/centros/gestion` y `GET /api/centros/gestion/{id}` (activos e inactivos, con su uso y una `huella`); `POST /api/centros`; `PATCH /api/centros/{id}` (con `huella`); `PATCH /api/centros/{id}/activo` (con `huella` y, al desactivar, `confirmarImpacto`) | consulta: gestión; escritura: ADMIN |
 | Gestión de locales (RF-04) | `GET /api/centros/{id}/locales/gestion` y `GET /api/locales/gestion/{id}` (activos e inactivos, con su centro, su uso y una `huella`); `POST /api/centros/{id}/locales`; `PATCH /api/locales/{id}` (con `huella`; `codigo` y `centroId`, si se envían, deben coincidir); `PATCH /api/locales/{id}/activo` (con `huella` y, al desactivar, `confirmarImpacto`). `GET /api/centros/{id}/locales` no cambia (solo activos) | consulta: gestión; escritura: ADMIN |
+| Gestión de inquilinos (RF-05) | `GET /api/inquilinos/gestion` y `GET /api/inquilinos/gestion/{id}` (activos e inactivos, con su uso y una `huella`); `POST /api/inquilinos`; `PATCH /api/inquilinos/{id}` (con `huella`; `cif`, si se envía, debe coincidir, salvo que el inquilino no lo tuviera); `PATCH /api/inquilinos/{id}/activo` (con `huella` y, al desactivar, `confirmarImpacto`). Distinto del área `/api/inquilino/**` del rol INQUILINO, que no cambia | consulta: gestión; escritura: ADMIN |
 | Obligaciones | `GET /api/locales/{id}/obligaciones`; `GET` y `POST /api/obligaciones/{id}/mantenimientos`; `PATCH /api/obligaciones/{id}/responsable` | consulta: gestión e INQUILINO; escritura: gestión |
 | Mantenimientos | `PATCH /api/mantenimientos/{id}/estado` (sin FINALIZADO); `GET`, `PUT` y `DELETE /api/mantenimientos/{id}/asignacion` | gestión |
 | Intervenciones | `GET` y `POST /api/mantenimientos/{id}/intervenciones`; `GET` y `PATCH /api/intervenciones/{id}`; `POST …/{id}/documentos`, `POST …/{id}/envio`; `GET …/{id}/documentos/{docId}/archivo` | gestión y PROVEEDOR asignado |
@@ -143,6 +144,13 @@ Todos requieren `Authorization: Bearer <token>`, salvo el login y `/actuator/hea
 
   - En la gestión de centros (FH-013) se usan los mismos códigos `CODIGO_DUPLICADO`, `NOMBRE_DUPLICADO` (mismo nombre en la misma ciudad), `DATOS_DESACTUALIZADOS` e `IMPACTO_NO_CONFIRMADO`, y además `CENTRO_EN_USO` (no se puede desactivar: el 409 lleva `ocupacionesVigentes`, `ocupacionesFuturas` y `mantenimientosAbiertos`).
 
+**Cómo se protege la gestión de inquilinos (FH-015):**
+- Códigos de error: `CIF_DUPLICADO` (mismo CIF/NIF que otro inquilino, activo o inactivo, comparado sin espacios, guiones, puntos ni mayúsculas), `INQUILINO_EN_USO` (no se puede desactivar: el 409 lleva `ocupacionesVigentes`, `ocupacionesFuturas` y `mantenimientosAbiertos`), `IMPACTO_NO_CONFIRMADO` (con el resumen: `ocupaciones`, `usuarios`, `solicitudesPendientes` y `declaracionesActivas`) y `DATOS_DESACTUALIZADOS`. Cambiar el CIF devuelve 400.
+- **Unicidad sin índice:** la tabla `inquilinos` no tiene restricción única en `cif` y no se crean migraciones. Todas las escrituras toman primero un bloqueo asesor propio de PostgreSQL (`8_015_001`) y después la fila del inquilino (siempre en ese orden), y comprueban el CIF dentro del bloqueo. Huella SHA-256 de los valores.
+- **Uso del inquilino:** ocupaciones vigentes o futuras (las definiciones de FH-013, con la fecha de Europe/Madrid) y mantenimientos abiertos **vinculados a sus ocupaciones** (`mantenimientos.ocupacion_id`); no cuentan los mantenimientos de un local que ocupó si no estaban a su cargo. Bloquean la desactivación aunque se confirme.
+- **Inquilino inactivo:** sus usuarios siguen activos, pero `DocumentoAutorizacionService.inquilinoConAcceso` (regla existente) les niega el área del inquilino. No se modifica ningún dato relacionado (ocupaciones, usuarios, solicitudes, declaraciones).
+- **Límites:** un `INSERT` por SQL puede repetir un CIF (no hay índice). La gestión de ocupaciones y de usuarios inquilino no forma parte de RF-05.
+
 **Cómo se protege la gestión de locales (FH-014):**
 - Códigos de error: `CODIGO_DUPLICADO` (mismo código en el mismo centro, sin distinguir mayúsculas), `CENTRO_INACTIVO` (alta o reactivación con el centro inactivo), `LOCAL_EN_USO` (no se puede desactivar: el 409 lleva `ocupacionesVigentes`, `ocupacionesFuturas` y `mantenimientosAbiertos`), `IMPACTO_NO_CONFIRMADO` (con el resumen) y `DATOS_DESACTUALIZADOS`. Cambiar el código o el centro devuelve 400.
 - **Bloqueos, siempre en el mismo orden:** primero la fila del centro y después la del local. Lo hacen el alta, la edición y la (des)activación del local, y también las altas de instalaciones, obligaciones y mantenimientos de un local, que leen su estado después de bloquearlo. Así una desactivación y un alta relacionada no se cruzan. Además, el índice `uq_local_centro_codigo` es la última defensa contra códigos repetidos. Huella SHA-256 de los valores; sin migraciones nuevas.
@@ -164,7 +172,7 @@ Todos requieren `Authorization: Bearer <token>`, salvo el login y `/actuator/hea
 - **Exigir documento:** solo se permite si no quedan intervenciones abiertas del tipo (`BORRADOR` o `REQUIERE_CORRECCION`, con resultado ejecutado o sin decidir) sin ninguna evidencia.
 
 ## Pruebas
-- **Unitarias:** `mvn test` ejecuta 193 pruebas (Mockito) sin base de datos.
+- **Unitarias:** `mvn test` ejecuta 203 pruebas (Mockito) sin base de datos.
 - **Integración (`*IT`):** MockMvc, JWT y JPQL reales con *rollback* por prueba.
   - Una barrera (`P4Entorno`) solo permite ejecutarlas contra la base de pruebas dedicada `facilityhub_fh005_p3`, con `-Dp4.autorizado=facilityhub_fh005_p3` y la variable `P4_DB_PASSWORD`.
   - No se lanzan con `mvn test` por defecto.

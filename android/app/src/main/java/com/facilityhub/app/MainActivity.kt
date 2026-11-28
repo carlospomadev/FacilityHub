@@ -318,6 +318,26 @@ fun FacilityHubApp(
                         onLocales = { c -> nav.navigate("locales-gestion/${c.id}/${enc(c.nombre)}") })
                 }
 
+                // FH-015 / RF-05: gestion de inquilinos y su formulario (alta, edicion y activacion solo ADMIN).
+                composable("inquilinos-gestion") {
+                    InquilinosGestionScreen(
+                        vm = vm,
+                        onNuevo = { nav.navigate("inquilino-nuevo") },
+                        onInquilino = { i -> nav.navigate("inquilino-editar/${i.id}") },
+                        onBack = { nav.popBackStack() }
+                    )
+                }
+
+                composable("inquilino-nuevo") {
+                    InquilinoFormScreen(vm = vm, inquilinoId = null, onCancelar = { nav.popBackStack() },
+                        onGuardado = { nav.popBackStack() })
+                }
+
+                composable("inquilino-editar/{id}", arguments = listOf(navArgument("id") { type = NavType.LongType })) { entry ->
+                    InquilinoFormScreen(vm = vm, inquilinoId = entry.arguments!!.getLong("id"),
+                        onCancelar = { nav.popBackStack() }, onGuardado = { nav.popBackStack() })
+                }
+
                 composable("declaraciones") {
                     DeclaracionesScreen(flujo) { nav.popBackStack() }
                 }
@@ -404,7 +424,9 @@ private val ACCESOS_GESTION = listOf(
     // FH-012 / RF-08: catalogo de tipos (ADMIN gestiona; EXPLOTACION consulta).
     "tipos-mantenimiento" to "Tipos de mantenimiento",
     // FH-013 / RF-03 (D8): gestion de centros, activos e inactivos (ADMIN gestiona; EXPLOTACION consulta).
-    "centros-gestion" to "Gestionar centros"
+    "centros-gestion" to "Gestionar centros",
+    // FH-015 / RF-05 (D8): gestion de inquilinos, activos e inactivos (ADMIN gestiona; EXPLOTACION consulta).
+    "inquilinos-gestion" to "Gestionar inquilinos"
 )
 
 // Navegacion dentro de un centro: locales, ficha del local, mantenimientos y documentos (sin cambios en R3).

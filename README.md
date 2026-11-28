@@ -33,7 +33,7 @@ Los permisos se comprueban siempre en el backend. El rol se vuelve a leer de la 
 ## Funcionalidades
 
 - **Autenticación JWT y control de acceso** por rol y por recurso.
-- **Consulta de centros, locales e inquilino actual.** Centros y locales se gestionan desde la app (RF-03 y RF-04); los inquilinos se siguen cargando mediante migraciones (RF-05 es solo de consulta).
+- **Consulta de centros, locales e inquilino actual.** Centros, locales e inquilinos se gestionan desde la app (RF-03, RF-04 y RF-05). Las ocupaciones (qué inquilino ocupa cada local) y los usuarios inquilino se siguen cargando mediante migraciones.
 - **Registro de instalaciones (RF-07, FH-010A):**
   - alta desde la app en un local o en la **zona común** del centro;
   - nombre, tipo, descripción y estado;
@@ -83,6 +83,13 @@ Los permisos se comprueban siempre en el backend. El rol se vuelve a leer de la 
   - no se puede desactivar un local con ocupaciones vigentes o futuras o con mantenimientos abiertos; si no los tiene, se pide confirmación con un resumen (instalaciones, obligaciones, historial);
   - desactivar no borra nada y el local inactivo no admite instalaciones, obligaciones ni mantenimientos nuevos; en un centro inactivo no se pueden crear ni reactivar locales;
   - si otro administrador ha cambiado el local mientras lo editas, la app avisa y no se sobrescribe nada; cada cambio queda en la auditoría.
+- **Gestión de inquilinos (RF-05, FH-015):**
+  - desde la pestaña Centros → «Gestionar inquilinos»: ADMIN da de alta, edita, desactiva y reactiva inquilinos; EXPLOTACION los consulta todos, también los inactivos; buscador por CIF o nombre;
+  - CIF/NIF obligatorio, único entre todos los inquilinos (sin distinguir espacios, guiones, puntos ni mayúsculas) y que no se puede cambiar; razón social obligatoria (puede repetirse); nombre comercial, email y teléfono opcionales. Un inquilino antiguo sin CIF puede recibirlo una sola vez;
+  - no se puede desactivar un inquilino con ocupaciones vigentes o futuras ni con mantenimientos abiertos vinculados a sus ocupaciones; si no los tiene, se pide confirmación con un resumen (histórico de ocupación, usuarios, solicitudes y proveedores declarados);
+  - desactivar no borra nada: el histórico de ocupación (RF-06) y los usuarios se conservan, pero sus usuarios dejan de acceder al área del inquilino;
+  - si otro administrador ha cambiado el inquilino mientras lo editas, la app avisa y no se sobrescribe nada; cada cambio queda en la auditoría;
+  - **todavía no se puede vincular un inquilino nuevo a un local ni crearle usuarios desde la app** (queda fuera de RF-05).
 - **Mejoras de diseño en la app Android (FH-009):**
   - Material 3 con tema claro y oscuro, y navegación inferior por rol;
   - panel de Explotación y selector de fecha en español;
@@ -123,16 +130,16 @@ Toda la información sensible va en variables de entorno, nunca en el repositori
 **Usuarios de demostración** (creados por la migración V3): `admin@facilityhub.local`, `explotacion@facilityhub.local` e `inquilino@facilityhub.local`. Las contraseñas no se publican en el repositorio: las facilita el responsable del proyecto. Los usuarios PROVEEDOR los da de alta un ADMIN desde la API.
 
 ## Pruebas y validación
-- `mvn test` en `backend/`: **193 pruebas unitarias** (sin base de datos).
+- `mvn test` en `backend/`: **203 pruebas unitarias** (sin base de datos).
 - **Pruebas de integración (`*IT`):** se ejecutan contra una base de pruebas dedicada con una barrera de seguridad. Ver [`backend/README.md`](backend/README.md#pruebas).
 - **`scripts/validar-api.ps1`:** recorrido completo de la API con el circuito vigente (mantenimiento → intervención → envío → validación).
 - **Demostración reproducible** ([`scripts/demo/`](scripts/demo/README.md)): base desechable propia con comprobaciones automáticas.
 
-Últimos resultados (FH-014, 28/11/2026; todas las pruebas que escriben datos se ejecutan en bases desechables):
+Últimos resultados (FH-015, 28/11/2026; todas las pruebas que escriben datos se ejecutan en bases desechables):
 
 | Batería | Resultado |
 |---|---|
-| Unitarias del backend | 193/193 |
+| Unitarias del backend | 203/203 |
 | Integración con barrera (`InstalacionesFH010AP6IT`) | 9/9 |
 | API de la demo con ciclo completo | 66/66 |
 | Alta de instalaciones: API / Android | 27/27 / 18/18 |
@@ -140,6 +147,7 @@ Toda la información sensible va en variables de entorno, nunca en el repositori
 | Gestión de tipos: API / Android | 26/26 / 22/22 |
 | Gestión de centros: API / Android | 34/34 / 22/22 |
 | Gestión de locales: API / Android | 38/38 / 23/23 |
+| Gestión de inquilinos: API / Android | 30/30 / 22/22 |
 | Migración V10 en bases desechables | 12/12 |
 | Regresión Android (los cuatro roles) | 26/26 |
 | Preparación de la demo | 14/14 |
@@ -155,7 +163,7 @@ Requisitos funcionales del informe de avance v0.7 y su estado en `main`:
 | RF-02 | Roles | Completo (ADMIN, EXPLOTACION, INQUILINO y PROVEEDOR) |
 | RF-03 | Centros | **Completo:** alta, edición, desactivación y reactivación desde la app (FH-013) |
 | RF-04 | Locales | **Completo:** alta, edición, desactivación y reactivación desde la app (FH-014) |
-| RF-05 | Inquilinos | Consulta del inquilino actual; sin alta |
+| RF-05 | Inquilinos | **Completo:** alta, edición, desactivación y reactivación desde la app (FH-015); la vinculación a locales sigue por migración |
 | RF-06 | Ocupación e histórico | Completo |
 | RF-07 | Instalaciones | **Completo:** alta desde la app (FH-010A); sin edición |
 | RF-08 | Tipos de mantenimiento | **Completo:** alta, edición, desactivación y reactivación desde la app (FH-012) |
@@ -165,7 +173,7 @@ Requisitos funcionales del informe de avance v0.7 y su estado en `main`:
 | RF-12 | Consulta de cumplimiento | Completo (historial del local y panel de Explotación) |
 
 **Pendiente:**
-- dar de alta y editar inquilinos (RF-05);
+- vincular inquilinos a locales (crear o terminar ocupaciones) y crear usuarios inquilino desde la app (fuera de RF-05; se evaluará en el cierre);
 - editar instalaciones y obligaciones ya registradas;
 - validar el arranque con Docker Compose y con `mvn spring-boot:run` (ver la tabla de vías de arranque).
 

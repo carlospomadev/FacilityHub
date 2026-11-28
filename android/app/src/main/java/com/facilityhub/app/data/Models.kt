@@ -62,6 +62,19 @@ data class CrearLocalRequest(val codigo: String, val nombre: String, val planta:
 // El centro y el codigo no se envian: no se pueden cambiar (D2, D6).
 data class EditarLocalRequest(val nombre: String, val planta: String?, val ubicacion: String?, val huella: String)
 data class CambiarActivoLocalRequest(val activo: Boolean, val huella: String, val confirmarImpacto: Boolean?)
+// FH-015 / RF-05: gestion de inquilinos (activos e inactivos), con su uso y la huella de sus valores.
+data class InquilinoGestionDto(
+    val id: Long, val cif: String?, val razonSocial: String, val nombreComercial: String?, val emailContacto: String?,
+    val telefono: String?, val activo: Boolean, val ocupaciones: Long = 0, val ocupacionesVigentes: Long = 0,
+    val ocupacionesFuturas: Long = 0, val mantenimientosAbiertos: Long = 0, val usuarios: Long = 0,
+    val solicitudesPendientes: Long = 0, val declaracionesActivas: Long = 0, val huella: String
+)
+data class CrearInquilinoRequest(val cif: String, val razonSocial: String, val nombreComercial: String?,
+                                 val emailContacto: String?, val telefono: String?)
+// cif solo se envia si el inquilino no lo tenia (registro antiguo): despues no se puede cambiar (D4).
+data class EditarInquilinoRequest(val cif: String?, val razonSocial: String, val nombreComercial: String?,
+                                  val emailContacto: String?, val telefono: String?, val huella: String)
+data class CambiarActivoInquilinoRequest(val activo: Boolean, val huella: String, val confirmarImpacto: Boolean?)
 data class CrearInstalacionRequest(val localId: Long?, val nombre: String, val tipo: String, val descripcion: String?, val estado: String)
 data class ObligacionDto(val id: Long, val localId: Long, val instalacion: String?, val tipoMantenimiento: String, val periodicidadMeses: Int, val proximaFecha: String, val estado: String)
 data class MantenimientoDto(val id: Long, val obligacionId: Long, val fechaProgramada: String, val fechaRealizacion: String?, val estado: String, val descripcion: String?, val observaciones: String?)
