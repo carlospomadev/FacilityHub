@@ -45,6 +45,9 @@ class ObligacionesFH010BUnitTest {
         usuarioRepository = mock(UsuarioRepository.class);
         centroRepository = mock(CentroRepository.class);
         localRepository = mock(LocalComercialRepository.class);
+        // FH-014 (D7): el estado del local se lee tras bloquear su fila; en estas pruebas, el del local simulado.
+        when(localRepository.bloquearYEstaActivo(any())).thenAnswer(inv -> localRepository.findById(inv.getArgument(0))
+            .map(LocalComercial::isActivo).orElse(false));
         instalacionRepository = mock(InstalacionRepository.class);
         tipoRepository = mock(TipoMantenimientoRepository.class);
         obligacionRepository = mock(ObligacionMantenimientoRepository.class);
