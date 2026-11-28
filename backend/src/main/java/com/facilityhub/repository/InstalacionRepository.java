@@ -23,4 +23,7 @@ public interface InstalacionRepository extends JpaRepository<Instalacion, Long> 
     boolean existsByLocalIdAndNombreIgnoreCase(Long localId, String nombre);
 
     boolean existsByCentroIdAndLocalIsNullAndNombreIgnoreCase(Long centroId, String nombre);
+
+    // FH-013 / RF-03: uso de un centro (resumen antes de desactivar).
+    long countByCentroId(Long centroId);
 }

@@ -17,6 +17,27 @@ public class Centro {
     @Column(name = "created_at", nullable = false) private LocalDateTime createdAt;
 
     protected Centro() {}
+
+    // FH-013 / RF-03: alta desde la API. El codigo se fija aqui y no tiene metodo para cambiarlo (D2).
+    public Centro(String codigo, String nombre, String direccion, String ciudad, String descripcion, LocalDateTime createdAt) {
+        this.codigo = codigo;
+        this.nombre = nombre;
+        this.direccion = direccion;
+        this.ciudad = ciudad;
+        this.descripcion = descripcion;
+        this.activo = true;
+        this.createdAt = createdAt;
+    }
+
+    // FH-013 / RF-03: edicion de los datos descriptivos (no el codigo). Las reglas las valida CentroGestionService.
+    public void actualizar(String nombre, String direccion, String ciudad, String descripcion) {
+        this.nombre = nombre;
+        this.direccion = direccion;
+        this.ciudad = ciudad;
+        this.descripcion = descripcion;
+    }
+
+    public void cambiarActivo(boolean activo) { this.activo = activo; }
     public Long getId() { return id; }
     public String getCodigo() { return codigo; }
     public String getNombre() { return nombre; }

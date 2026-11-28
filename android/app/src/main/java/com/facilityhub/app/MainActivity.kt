@@ -298,6 +298,25 @@ fun FacilityHubApp(
                         onCancelar = { nav.popBackStack() }, onGuardado = { nav.popBackStack() })
                 }
 
+                // FH-013 / RF-03: gestion de centros y su formulario (alta, edicion y activacion solo ADMIN).
+                composable("centros-gestion") {
+                    CentrosGestionScreen(
+                        vm = vm,
+                        onNuevo = { nav.navigate("centro-nuevo") },
+                        onCentro = { c -> nav.navigate("centro-editar/${c.id}") },
+                        onBack = { nav.popBackStack() }
+                    )
+                }
+
+                composable("centro-nuevo") {
+                    CentroFormScreen(vm = vm, centroId = null, onCancelar = { nav.popBackStack() }, onGuardado = { nav.popBackStack() })
+                }
+
+                composable("centro-editar/{id}", arguments = listOf(navArgument("id") { type = NavType.LongType })) { entry ->
+                    CentroFormScreen(vm = vm, centroId = entry.arguments!!.getLong("id"),
+                        onCancelar = { nav.popBackStack() }, onGuardado = { nav.popBackStack() })
+                }
+
                 composable("declaraciones") {
                     DeclaracionesScreen(flujo) { nav.popBackStack() }
                 }
@@ -382,7 +401,9 @@ private val ACCESOS_GESTION = listOf(
     "declaraciones" to "Declarados",
     "solicitudes-gestion" to "Solicitudes",
     // FH-012 / RF-08: catalogo de tipos (ADMIN gestiona; EXPLOTACION consulta).
-    "tipos-mantenimiento" to "Tipos de mantenimiento"
+    "tipos-mantenimiento" to "Tipos de mantenimiento",
+    // FH-013 / RF-03 (D8): gestion de centros, activos e inactivos (ADMIN gestiona; EXPLOTACION consulta).
+    "centros-gestion" to "Gestionar centros"
 )
 
 // Navegacion dentro de un centro: locales, ficha del local, mantenimientos y documentos (sin cambios en R3).

@@ -52,4 +52,9 @@ public interface CentroRepository extends JpaRepository<Centro, Long> {
     boolean esVisibleParaInquilino(@Param("centroId") Long centroId,
                                    @Param("inquilinoId") Long inquilinoId,
                                    @Param("hoy") LocalDate hoy);
+
+    // FH-013 / RF-03: catalogo completo (activos e inactivos) para la gestion de centros.
+    List<Centro> findAllByOrderByNombreAsc();
+
+    boolean existsByCodigo(String codigo);
 }

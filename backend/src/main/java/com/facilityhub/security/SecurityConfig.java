@@ -131,6 +131,13 @@ public class SecurityConfig {
                     .hasAnyRole("ADMIN", "EXPLOTACION")
                 .requestMatchers("/api/proveedores/**")
                     .hasRole("ADMIN")
+                // FH-013 / RF-03 (D1): gestion de centros. Consulta solo gestion; alta, edicion y activacion solo ADMIN.
+                .requestMatchers(HttpMethod.GET, "/api/centros/gestion", "/api/centros/gestion/*")
+                    .hasAnyRole("ADMIN", "EXPLOTACION")
+                .requestMatchers(HttpMethod.POST, "/api/centros")
+                    .hasRole("ADMIN")
+                .requestMatchers(HttpMethod.PATCH, "/api/centros/*", "/api/centros/*/activo")
+                    .hasRole("ADMIN")
                 .requestMatchers(HttpMethod.GET, "/api/centros/**", "/api/locales/**", "/api/obligaciones/**")
                     .hasAnyRole("ADMIN", "EXPLOTACION", "INQUILINO")
                 .requestMatchers(HttpMethod.POST, "/api/obligaciones/**")

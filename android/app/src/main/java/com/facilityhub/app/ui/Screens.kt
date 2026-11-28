@@ -218,11 +218,9 @@ fun CentrosScreen(
     accesos: List<Pair<String, String>> = emptyList(),
     onMenu: (String) -> Unit = {}
 ) {
-    LaunchedEffect(Unit) {
-        if (vm.centros.isEmpty()) {
-            vm.cargarCentros()
-        }
-    }
+    // FH-013: recarga si los datos cambiaron (CambiosDatos) o caducaron, no solo cuando la lista esta vacia; asi un centro
+    // desactivado o reactivado desde «Gestionar centros» desaparece o vuelve a aparecer aqui.
+    LaunchedEffect(Unit) { vm.cargarCentros() }
 
     ScreenScaffold(
         title = "Centros",

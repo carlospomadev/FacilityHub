@@ -42,6 +42,15 @@ data class EditarTipoRequest(
     val reglaRecalculo: String, val huella: String, val confirmarImpacto: Boolean?
 )
 data class CambiarActivoTipoRequest(val activo: Boolean, val huella: String, val confirmarImpacto: Boolean?)
+// FH-013 / RF-03: gestion de centros (activos e inactivos), con su uso y la huella de sus valores.
+data class CentroGestionDto(
+    val id: Long, val codigo: String, val nombre: String, val direccion: String?, val ciudad: String, val descripcion: String?,
+    val activo: Boolean, val localesActivos: Long, val locales: Long, val instalaciones: Long, val obligacionesActivas: Long,
+    val ocupacionesVigentes: Long, val ocupacionesFuturas: Long = 0, val mantenimientosAbiertos: Long, val huella: String
+)
+data class CrearCentroRequest(val codigo: String, val nombre: String, val direccion: String?, val ciudad: String, val descripcion: String?)
+data class EditarCentroRequest(val nombre: String, val direccion: String?, val ciudad: String, val descripcion: String?, val huella: String)
+data class CambiarActivoCentroRequest(val activo: Boolean, val huella: String, val confirmarImpacto: Boolean?)
 data class CrearInstalacionRequest(val localId: Long?, val nombre: String, val tipo: String, val descripcion: String?, val estado: String)
 data class ObligacionDto(val id: Long, val localId: Long, val instalacion: String?, val tipoMantenimiento: String, val periodicidadMeses: Int, val proximaFecha: String, val estado: String)
 data class MantenimientoDto(val id: Long, val obligacionId: Long, val fechaProgramada: String, val fechaRealizacion: String?, val estado: String, val descripcion: String?, val observaciones: String?)

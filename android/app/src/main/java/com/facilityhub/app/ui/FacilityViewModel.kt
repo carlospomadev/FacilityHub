@@ -96,8 +96,17 @@ class FacilityViewModel(application: Application) : AndroidViewModel(application
     var guardandoTipo by mutableStateOf(false); private set
     var errorTipo by mutableStateOf<ErrorGestionTipo?>(null); private set
     var avisoTipo by mutableStateOf<String?>(null); private set
+    // FH-013 / RF-03: gestion de centros (activos e inactivos; consulta: gestion; escritura: solo ADMIN).
+    var catalogoCentros by mutableStateOf<List<CentroGestionDto>>(emptyList()); private set
+    val lecCatalogoCentros = Lectura()
+    var centroEditado by mutableStateOf<CentroGestionDto?>(null); private set
+    val lecCentroEditado = Lectura()
+    var guardandoCentro by mutableStateOf(false); private set
+    var errorCentro by mutableStateOf<ErrorGestionCentro?>(null); private set
+    var avisoCentro by mutableStateOf<String?>(null); private set
     private val lecturas = listOf(lecCentros, lecLocales, lecLocal, lecMantenimientos, lecDocumentos, lecTrabajos, lecTrabajo,
-        lecInstalacionesCentro, lecTipos, lecObligacionesCentro, lecCatalogoTipos, lecTipoEditado)
+        lecInstalacionesCentro, lecTipos, lecObligacionesCentro, lecCatalogoTipos, lecTipoEditado, lecCatalogoCentros,
+        lecCentroEditado)
     private val caducar: () -> Unit = { if (loggedIn) sesionCaducada = true }
 
     // FH-009 / R2: true cuando el ultimo intento de login fallo por credenciales (los campos se marcan en error).
@@ -312,6 +321,61 @@ class FacilityViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
+    // ---------- FH-013 / RF-03: gestion de centros ----------
+
+    fun cargarCatalogoCentros(forzar: Boolean = false) {
+        if (!puedeGestionar) return
+        if (!forzar && !lecCatalogoCentros.necesitaRecarga("catalogo")) return
+        lecCatalogoCentros.lanzar(sesion.scope, "catalogo", { catalogoCentros = emptyList() }, { repository.catalogoCentros() },
+            { catalogoCentros = it }, caducar)
+    }
+
+    /** Siempre pide el centro al backend: la huella y el uso deben ser los actuales al abrir (o actualizar) la ficha. */
+    fun cargarCentroEditado(id: Long) {
+        if (!puedeGestionar) return
+        lecCentroEditado.lanzar(sesion.scope, id, { centroEditado = null }, { repository.centroGestion(id) },
+            { centroEditado = it }, caducar)
+    }
+
+    fun crearCentro(peticion: CrearCentroRequest, onHecho: (CentroGestionDto) -> Unit) =
+        escrituraCentro({ repository.crearCentro(peticion) }, { "Centro «${it.nombre}» registrado." }, onHecho)
+
+    fun editarCentro(id: Long, peticion: EditarCentroRequest, onHecho: (CentroGestionDto) -> Unit) =
+        escrituraCentro({ repository.editarCentro(id, peticion) }, { "Centro «${it.nombre}» actualizado." }, onHecho)
+
+    fun cambiarActivoCentro(id: Long, peticion: CambiarActivoCentroRequest, onHecho: (CentroGestionDto) -> Unit) =
+        escrituraCentro({ repository.cambiarActivoCentro(id, peticion) },
+            { if (it.activo) "Centro «${it.nombre}» reactivado."
+              else "Centro «${it.nombre}» desactivado. Sus datos se conservan." },
+            onHecho)
+
+    // Guarda sincrona contra dobles envios; el formulario conserva sus datos si falla. Tras guardar, CambiosDatos invalida
+    // la gestion y la pestaña «Centros» (que solo muestra los activos).
+    private fun escrituraCentro(peticion: suspend () -> CentroGestionDto, aviso: (CentroGestionDto) -> String,
+                                onHecho: (CentroGestionDto) -> Unit) {
+        if (guardandoCentro || !esAdmin) return
+        guardandoCentro = true; errorCentro = null
+        sesion.scope.launch {
+            try {
+                val centro = peticion()
+                CambiosDatos.marcar()
+                centroEditado = centro
+                avisoCentro = aviso(centro)
+                onHecho(centro)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                errorCentro = errorGestionCentro(e)
+                if (e is HttpException && e.code() == 401 && loggedIn) sesionCaducada = true
+            } finally {
+                guardandoCentro = false
+            }
+        }
+    }
+
+    fun limpiarErrorCentro() { errorCentro = null }
+    fun consumirAvisoCentro() { avisoCentro = null }
+
     fun limpiarErrorTipo() { errorTipo = null }
     fun consumirAvisoTipo() { avisoTipo = null }
     fun consumirAvisoObligacion() { avisoObligacion = null }
@@ -392,6 +456,7 @@ class FacilityViewModel(application: Application) : AndroidViewModel(application
         tiposMantenimiento = emptyList(); obligacionesCentro = emptyList(); guardandoObligacion = false
         errorObligacion = null; avisoObligacion = null
         catalogoTipos = emptyList(); tipoEditado = null; guardandoTipo = false; errorTipo = null; avisoTipo = null
+        catalogoCentros = emptyList(); centroEditado = null; guardandoCentro = false; errorCentro = null; avisoCentro = null
     }
 
     fun clearError() { error = null; credencialesIncorrectas = false }
@@ -574,6 +639,43 @@ internal fun errorGestionTipo(http: Int, cuerpo: String): ErrorGestionTipo {
                 "El código debe tener entre 2 y 40 caracteres: letras, números y guiones, sin espacios.", CampoTipo.CODIGO)
             http == 400 -> ErrorGestionTipo("Datos no válidos. Revisa los campos marcados.")
             else -> ErrorGestionTipo("No se pudo guardar: la operación entra en conflicto con los datos actuales. Recarga los datos.")
+        }
+    }
+}
+
+/** FH-013: campo del formulario de centros al que se liga un rechazo (null = mensaje general). */
+enum class CampoCentro { CODIGO, NOMBRE }
+/** [codigo] = codigo estable del 409 del backend (CENTRO_EN_USO, IMPACTO_NO_CONFIRMADO, DATOS_DESACTUALIZADOS...). */
+data class ErrorGestionCentro(val mensaje: String, val campo: CampoCentro? = null, val codigo: String? = null)
+
+// FH-013: traduce los rechazos de la gestion de centros. El cuerpo de error solo se lee una vez.
+internal fun errorGestionCentro(e: Exception): ErrorGestionCentro {
+    if (e !is HttpException || e.code() !in setOf(400, 404, 409)) return ErrorGestionCentro(mensajeError(e))
+    val cuerpo = try { e.response()?.errorBody()?.string().orEmpty() } catch (_: Exception) { "" }
+    return errorGestionCentro(e.code(), cuerpo)
+}
+
+internal fun errorGestionCentro(http: Int, cuerpo: String): ErrorGestionCentro {
+    val detalle = campoTextoJson(cuerpo, "detail").orEmpty()
+    val codigo = campoTextoJson(cuerpo, "codigo")
+    return when (codigo) {
+        "CODIGO_DUPLICADO" -> ErrorGestionCentro("Ya existe un centro con ese código.", CampoCentro.CODIGO, codigo)
+        "NOMBRE_DUPLICADO" -> ErrorGestionCentro("Ya existe un centro con ese nombre en esa ciudad.", CampoCentro.NOMBRE, codigo)
+        "DATOS_DESACTUALIZADOS" -> ErrorGestionCentro(
+            "Este centro ha sido modificado por otro usuario. Actualiza los datos antes de guardar.", null, codigo)
+        "CENTRO_EN_USO" -> ErrorGestionCentro(
+            "No se puede desactivar: el centro tiene ${campoNumeroJson(cuerpo, "ocupacionesVigentes") ?: 0} ocupaciones vigentes, " +
+                "${campoNumeroJson(cuerpo, "ocupacionesFuturas") ?: 0} ocupaciones futuras y " +
+                "${campoNumeroJson(cuerpo, "mantenimientosAbiertos") ?: 0} mantenimientos abiertos. Deben cerrarse antes.",
+            null, codigo)
+        "IMPACTO_NO_CONFIRMADO" -> ErrorGestionCentro("Confirma la desactivación para continuar.", null, codigo)
+        else -> when {
+            http == 404 -> ErrorGestionCentro("El centro ya no existe. Vuelve atrás y recarga la lista.")
+            detalle.contains("codigo de un centro") -> ErrorGestionCentro("El código no se puede modificar.", CampoCentro.CODIGO)
+            detalle.startsWith("El codigo debe") -> ErrorGestionCentro(
+                "El código debe tener entre 2 y 30 caracteres: letras, números y guiones, sin espacios.", CampoCentro.CODIGO)
+            http == 400 -> ErrorGestionCentro("Datos no válidos. Revisa los campos marcados.")
+            else -> ErrorGestionCentro("No se pudo guardar: la operación entra en conflicto con los datos actuales. Recarga los datos.")
         }
     }
 }

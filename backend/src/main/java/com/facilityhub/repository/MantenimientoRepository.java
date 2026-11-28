@@ -61,4 +61,23 @@ public interface MantenimientoRepository extends JpaRepository<Mantenimiento, Lo
         order by m.fechaProgramada desc, m.id desc
         """)
     List<Mantenimiento> delLocal(@Param("localId") Long localId);
+
+    // FH-013 / RF-03 (D4): mantenimientos ABIERTOS de cualquier obligacion del centro. Mismo criterio de dominio que el
+    // panel: no CANCELADO, sin intervencion APROBADO y, ademas, en PROGRAMADO/PENDIENTE/EN_PROCESO o con una intervencion
+    // sin resolver (BORRADOR, PENDIENTE_VALIDACION o REQUIERE_CORRECCION; incluye un FINALIZADO enviado sin validar).
+    @Query("""
+        select count(m) from Mantenimiento m
+        where m.obligacion.centro.id = :centroId
+          and m.estado <> com.facilityhub.domain.EstadoMantenimiento.CANCELADO
+          and not exists (select 1 from Intervencion a where a.mantenimiento = m
+                          and a.estadoValidacion = com.facilityhub.domain.EstadoValidacion.APROBADO)
+          and (m.estado in (com.facilityhub.domain.EstadoMantenimiento.PROGRAMADO,
+                            com.facilityhub.domain.EstadoMantenimiento.PENDIENTE,
+                            com.facilityhub.domain.EstadoMantenimiento.EN_PROCESO)
+               or exists (select 1 from Intervencion i where i.mantenimiento = m
+                          and i.estadoValidacion in (com.facilityhub.domain.EstadoValidacion.BORRADOR,
+                                                     com.facilityhub.domain.EstadoValidacion.PENDIENTE_VALIDACION,
+                                                     com.facilityhub.domain.EstadoValidacion.REQUIERE_CORRECCION)))
+        """)
+    long contarAbiertosDelCentro(@Param("centroId") Long centroId);
 }

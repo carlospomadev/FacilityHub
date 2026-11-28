@@ -287,3 +287,31 @@ Hasta ahora el catálogo de tipos solo se podía consultar. He añadido su gesti
   | Preparación de la demo | 14/14 |
 
 - **Corrección encontrada en las pruebas:** el campo Código desordenaba lo que se escribía al pasarlo a mayúsculas en cada pulsación; ahora se convierte al guardar.
+
+## 28/11/2026 – Gestión de centros (FH-013, RF-03)
+Hasta ahora los centros solo se podían consultar. He añadido su gestión desde Android para el rol ADMIN.
+- **Backend:**
+  - `GET /api/centros/gestion` y `GET /api/centros/gestion/{id}` para consultar todos los centros (también los inactivos) con su uso: locales, instalaciones, obligaciones, ocupaciones vigentes y mantenimientos abiertos;
+  - `POST /api/centros` para dar de alta;
+  - `PATCH /api/centros/{id}` para editar;
+  - `PATCH /api/centros/{id}/activo` para desactivar o reactivar.
+  - `GET /api/centros` sigue igual: solo los activos.
+- **Reglas:**
+  - código obligatorio, único y que no cambia (letras, números y guiones, de 2 a 30); nombre y ciudad obligatorios;
+  - no puede haber dos centros con el mismo nombre en la misma ciudad (sin distinguir mayúsculas ni espacios);
+  - no se puede desactivar un centro con ocupaciones vigentes, ocupaciones futuras activas o mantenimientos abiertos; si no los tiene, hay que confirmar viendo un resumen de lo que contiene;
+  - desactivar no borra ni cambia nada más; el centro inactivo no admite instalaciones, obligaciones ni mantenimientos nuevos, y se puede reactivar.
+- **Concurrencia:** igual que en los tipos (bloqueo de PostgreSQL, bloqueo de la fila y huella de los datos). El alta de mantenimientos bloquea también la fila del centro, así no se cruza con una desactivación.
+- **Auditoría:** alta, edición, desactivación y reactivación quedan registradas.
+- **Android:** acceso «Gestionar centros» desde la pestaña Centros (EXPLOTACION solo consulta), formulario de alta y edición y diálogo de desactivación con el resumen. La pestaña Centros ahora se recarga cuando cambian los datos.
+- **Base de datos:** no hay migraciones nuevas; la base principal sigue en V9.
+- **Pruebas:**
+
+  | Batería | Resultado |
+  |---|---|
+  | Unitarias | 183 |
+  | API | 34/34 |
+  | Android | 22/22 |
+  | API con ciclo completo | 66/66 |
+  | Regresión Android | 26/26 |
+  | Preparación de la demo | 14/14 |

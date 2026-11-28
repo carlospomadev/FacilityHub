@@ -26,4 +26,9 @@ public interface LocalComercialRepository extends JpaRepository<LocalComercial, 
     List<LocalComercial> findVisiblesEnCentroParaInquilino(@Param("centroId") Long centroId,
                                                            @Param("inquilinoId") Long inquilinoId,
                                                            @Param("hoy") LocalDate hoy);
+
+    // FH-013 / RF-03: uso de un centro (resumen antes de desactivar).
+    long countByCentroIdAndActivoTrue(Long centroId);
+
+    long countByCentroId(Long centroId);
 }
