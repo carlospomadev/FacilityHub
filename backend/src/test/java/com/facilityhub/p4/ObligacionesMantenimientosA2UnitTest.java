@@ -5,6 +5,7 @@ import com.facilityhub.api.dto.CrearMantenimientoRequest;
 import com.facilityhub.api.dto.MantenimientoDto;
 import com.facilityhub.api.dto.MantenimientoInquilinoDto;
 import com.facilityhub.api.dto.ObligacionDto;
+import com.facilityhub.domain.Centro;
 import com.facilityhub.domain.EstadoMantenimiento;
 import com.facilityhub.domain.EstadoObligacion;
 import com.facilityhub.domain.Inquilino;
@@ -14,6 +15,7 @@ import com.facilityhub.domain.ObligacionMantenimiento;
 import com.facilityhub.domain.Rol;
 import com.facilityhub.domain.TipoMantenimiento;
 import com.facilityhub.domain.Usuario;
+import com.facilityhub.repository.CentroRepository;
 import com.facilityhub.repository.IntervencionRepository;
 import com.facilityhub.repository.LocalComercialRepository;
 import com.facilityhub.repository.MantenimientoRepository;
@@ -79,8 +81,13 @@ class ObligacionesMantenimientosA2UnitTest {
         mantenimientoRepository = mock(MantenimientoRepository.class);
         DocumentoAutorizacionService autorizacion = new DocumentoAutorizacionService(usuarioRepository, ocupacionRepository, RELOJ);
         obligacionService = new ObligacionService(localRepository, obligacionRepository, ocupacionRepository, autorizacion);
+        // FH-013 (D6): el alta de mantenimientos bloquea la fila del centro y exige que este activo.
+        CentroRepository centroRepository = mock(CentroRepository.class);
+        Centro centroActivo = mock(Centro.class);
+        when(centroActivo.isActivo()).thenReturn(true);
+        when(centroRepository.findParaAlta(any())).thenReturn(Optional.of(centroActivo));
         mantenimientoService = new MantenimientoService(mantenimientoRepository, obligacionRepository, autorizacion,
-            mock(IntervencionRepository.class));
+            mock(IntervencionRepository.class), centroRepository);
 
         // existeOcupacionVigente ya incluye ocupacion activa y vigente, local activo y centro activo (B1).
         when(ocupacionRepository.existeOcupacionVigente(LOCAL_PROPIO, INQUILINO_ID, HOY)).thenReturn(true);
@@ -328,6 +335,9 @@ class ObligacionesMantenimientosA2UnitTest {
         when(obligacion.getId()).thenReturn(id);
         when(obligacion.getLocal()).thenReturn(local);
         when(obligacion.isActivo()).thenReturn(activa);
+        Centro centro = mock(Centro.class);
+        when(centro.getId()).thenReturn(1L);
+        when(obligacion.getCentro()).thenReturn(centro);
         return obligacion;
     }
 
