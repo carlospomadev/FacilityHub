@@ -28,4 +28,7 @@ public interface UsuarioRepository extends JpaRepository<Usuario, Long> {
         select u from Usuario u join u.rol r join u.inquilino i
         where i.id = :inquilinoId and i.activo = true and r.codigo = 'INQUILINO' and u.activo = true order by u.id""")
     java.util.List<Usuario> usuariosActivosDeInquilino(@org.springframework.data.repository.query.Param("inquilinoId") Long inquilinoId);
+
+    // FH-015 / RF-05: usuarios vinculados al inquilino (activos o no), para el resumen de la desactivacion.
+    long countByInquilinoId(Long inquilinoId);
 }

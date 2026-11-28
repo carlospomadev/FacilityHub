@@ -145,6 +145,14 @@ public class SecurityConfig {
                     .hasRole("ADMIN")
                 .requestMatchers(HttpMethod.PATCH, "/api/locales/*", "/api/locales/*/activo")
                     .hasRole("ADMIN")
+                // FH-015 / RF-05 (D1): gestion de inquilinos (/api/inquilinos, distinto del area /api/inquilino/** del rol
+                // INQUILINO). Consulta solo gestion; alta, edicion y activacion solo ADMIN. Cualquier otra ruta: denegada.
+                .requestMatchers(HttpMethod.GET, "/api/inquilinos/gestion", "/api/inquilinos/gestion/*")
+                    .hasAnyRole("ADMIN", "EXPLOTACION")
+                .requestMatchers(HttpMethod.POST, "/api/inquilinos")
+                    .hasRole("ADMIN")
+                .requestMatchers(HttpMethod.PATCH, "/api/inquilinos/*", "/api/inquilinos/*/activo")
+                    .hasRole("ADMIN")
                 .requestMatchers(HttpMethod.GET, "/api/centros/**", "/api/locales/**", "/api/obligaciones/**")
                     .hasAnyRole("ADMIN", "EXPLOTACION", "INQUILINO")
                 .requestMatchers(HttpMethod.POST, "/api/obligaciones/**")

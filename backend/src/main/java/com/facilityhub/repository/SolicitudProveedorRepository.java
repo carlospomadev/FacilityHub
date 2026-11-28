@@ -21,4 +21,7 @@ public interface SolicitudProveedorRepository extends JpaRepository<SolicitudPro
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select s from SolicitudProveedor s where s.id = :id")
     Optional<SolicitudProveedor> bloquear(@Param("id") Long id);
+
+    // FH-015 / RF-05: solicitudes del inquilino en un estado (resumen de la desactivacion, solo informativo).
+    long countByInquilinoIdAndEstado(Long inquilinoId, EstadoSolicitudProveedor estado);
 }
